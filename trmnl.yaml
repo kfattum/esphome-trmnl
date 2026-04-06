@@ -1,12 +1,18 @@
 substitutions:
-  server_ip: http://192.168.1.123:80 #http://192.168.1.119:4567
-  name: "trmnl-2025-12-7"
-  friendly_name: TRMNL
+  server_url: "http://192.168.1.123:80" #http://192.168.1.119:4567
+  mqtt_broker_ip: "192.168.1.100"
+  manual_ip_static_ip: "192.168.1.222"
+  manual_ip_gateway: "192.168.1.1"
+  manual_ip_subnet: "255.255.255.0"
+  name: "trmnl"
+  friendly_name: "TRMNL"
   status_led: GPIO2
   button: GPIO32
   adc_pin: GPIO34
   deep_sleep_pin: GPIO32
   deep_sleep_delay: 1000ms #Задержка перед сном для обновления экрана 
+  sleep_time: "3600" # sec
+  error_sleep_duration: "1200" # sec
   # img
   img_type: BINARY
   img_format: PNG
@@ -16,7 +22,7 @@ substitutions:
   dc_pin: GPIO27
   busy_pin: GPIO25
   reset_pin: GPIO26   
-  reset_duration: 2 ms
+  reset_duration: 200 ms
   model: 7.50in-bV3       #✅7.50in-bV2 ✅7.50in-bV3 ❌7.50in-bV3-bwr(много ест оперативки)
   # spi
   clk_pin: GPIO13
@@ -25,7 +31,7 @@ substitutions:
 globals:
   - id: device_id
     type: std::string
-    max_restore_data_length: 6
+    max_restore_data_length: 13
     restore_value: true
     initial_value: '""' # bold-eagle-15
   - id: api_key
@@ -36,39 +42,53 @@ globals:
   - id: sleep_time
     type: uint32_t
     restore_value: true
-    initial_value: "3600"
+    initial_value: "$sleep_time"
+  - id: current_page_id
+    type: uint8_t
+    restore_value: true
+    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page
 
 esp32:
   board: az-delivery-devkit-v4
   framework:
     type: esp-idf
+  cpu_frequency: 240MHz
 
 esphome:
   min_version: 2026.1.3 #https://github.com/esphome/esphome/pull/13599
   name: $name
   friendly_name: $friendly_name
-  platformio_options:
-    board_build.f_flash: 80000000L
+  # platformio_options:
+  #   board_build.f_flash: 80000000L
   # Automatically add the mac address to the name
   # so you can use a single firmware for all devices
   # name_add_mac_suffix: true
   # Dynamically set QR Code value for connecting to captive portal
   on_boot:
-    - priority: 600
-      then:
-        - lambda: |-
-            id(wifi_connect_qr).set_value("WIFI:T:nopass;S:" + App.get_name() + ";;");
+    priority: -10
+    then:
+      - delay: 15s # Даем время на попытку подключения
+      - if:
+          condition:
+            not:
+              wifi.connected:
+          then:
+            - script.execute: trmnl_error
+  #   - priority: 600
+  #     then:
+  #       - lambda: |-
+  #           id(wifi_connect_qr).set_value("WIFI:T:nopass;S:" + App.get_name() + ";;");
   # This will allow for project identification,
   # configuration and updates.
-  project:
-    name: jesserockz.trmnl
-    version: dev # This will be replaced by the github workflows with the `release` version
+  # project:
+  #   name: jesserockz.trmnl
+  #   version: dev # This will be replaced by the github workflows with the `release` version
 
 # This should point to the public location of the yaml file that will be adopted.
 # In this case it is the core yaml file that does not contain the extra things
 # that are provided by this factory yaml file as the user does not need these once adopted.
-dashboard_import:
-  package_import_url: github://jesserockz/esphome-trmnl/trmnl.yaml@main
+# dashboard_import:
+#   package_import_url: github://jesserockz/esphome-trmnl/trmnl.yaml@main
 
 # Sets up Bluetooth LE (Only on ESP32) to allow the user
 # to provision wifi credentials to the device.
@@ -80,31 +100,39 @@ logger:
   on_message:
     level: ERROR
     then:
-      - if:
-          condition:
-            api.connected:
-          then:
-            - homeassistant.service:
-                service: persistent_notification.create
-                data:
-                  title: "⚠️ Ошибка ESPHome: $name"
-                  notification_id: "esphome_error" # Раскомментируйте, если хотите перезаписывать одно уведомление, а не плодить новые
-                data_template:
-                  message: "Компонент: {{ tag }}\nДетали ошибки: {{ message }}"
-                variables:
-                  message: return message;
-                  tag: return tag;
+      - script.execute: trmnl_error
 
-# API is a requirement of the dashboard import.
-api:
-  encryption:
-    key: !secret enc_key
+# Example configuration entry
+mqtt:
+  broker: $mqtt_broker_ip
+  username: $name
+  password: !secret mqtt_password
+  on_connect:
+    - delay: 500ms
+    # - component.update: battery_voltage
+    # - component.update: wifi_signal_db
+    - if:
+        condition:
+          lambda: |-
+            return id(device_id).empty() || id(api_key).empty();
+        then:
+          - script.execute: trmnl_setup
+        else:
+          - script.execute: trmnl_update
 
-# OTA is required for Over-the-Air updating
-ota:
-  - platform: esphome
-    password: !secret ota_password
+  # birth_message:
+  #   topic: trmnl/status
+  #   payload:
+  # will_message:
+  #   topic: trmnl/status
+  #   payload: 
 
+# ota:
+#   - platform: esphome
+#     password: !secret ota_password
+    
+mdns:
+  disabled: true
 # Sets up the improv via serial client for Wi-Fi provisioning.
 # Handy if your device has a usb port for the user to add credentials when they first get it.
 improv_serial:
@@ -114,38 +142,28 @@ wifi:
   password: !secret wifi_password
   min_auth_mode: WPA2
   power_save_mode: LIGHT
-  fast_connect: true
-  # output_power: 8.5dB
-  manual_ip:
-    static_ip: 192.168.1.222
-    gateway: 192.168.1.1
-    subnet: 255.255.255.0
-  on_connect:
-    - delay: 16ms
-    - component.update: battery_level
-    - component.update: wifi_signal_db
-    - if:
-        condition:
-          lambda: |-
-            return id(device_id).empty() || id(api_key).empty();
-        then:
-          - script.execute: trmnl_setup
-        else:
-          - script.execute: trmnl_update
+  fast_connect: true # -5 сек
+  output_power: 8.5dB
+  manual_ip: 
+    static_ip: $manual_ip_static_ip  # -3 сек 
+    gateway: $manual_ip_gateway
+    subnet: $manual_ip_subnet
+
+          
   # Включите резервную точку доступа (captive portal) на случай сбоя Wi-Fi-соединения
-  ap:
-    ssid: $name
-    password: !secret hotspot_password
+  # ap:
+  #   ssid: $name
+  #   password: !secret hotspot_password
 
 # In combination with the `ap` this allows the user
 # to provision wifi credentials to the device.
-captive_portal:
+# captive_portal:
 
 http_request:
   buffer_size_tx: 2048
   verify_ssl: False
-  timeout: 15s
-  watchdog_timeout: 20s
+  timeout: 10s
+  watchdog_timeout: 15s
 
 deep_sleep:
   wakeup_pin:
@@ -153,26 +171,7 @@ deep_sleep:
     allow_other_uses: true  
     inverted: true 
   run_duration: 2 min
-  sleep_duration: 15 min
-
-font:
-  - id: roboto_16
-    file: gfonts://Roboto
-    size: 16
-  - id: roboto_32
-    file: gfonts://Roboto
-    size: 32
-        
-image:
-  - id: trmnl_logo
-    file: "images/logo--black.svg"
-    type: BINARY
-
-qr_code:
-  - id: wifi_connect_qr
-    value: "WIFI:T:nopass;S:TRMNL;;"
-  - id: wifi_failed_qr
-    value: "https://help.usetrmnl.com/en/articles/10193157-device-wifi-troubleshooting"
+  sleep_duration: $error_sleep_duration s
 
 online_image:
   - id: trmnl_image
@@ -182,11 +181,13 @@ online_image:
     url: $img_url_setup_logo
     resize: 800x480
     on_download_finished:
-      - display.page.show: trmnl_page
-      - component.update: trmnl_display
-      - delay: $deep_sleep_delay
-      - deep_sleep.enter:
-          sleep_duration: 3600 s #!lambda 'return id(sleep_time) * 1000;'
+      - delay: 16ms
+      - script.execute:
+          id: safe_update_display
+          target_page: 1
+          force_update: true 
+    on_error:
+        - script.execute: trmnl_error
 
 script:
 
@@ -198,35 +199,43 @@ script:
 #     "message": "Register at usetrmnl.com/signup with Device ID '...'",
 #     "status": 200
 # }
+
   - id: trmnl_setup
     then:
       - logger.log: "Setting up TRMNL"
       - http_request.get:
-          url: ${server_ip}/api/setup/
+          url: ${server_url}/api/setup/
           request_headers:
             ID: !lambda 'return id(mac_address_sensor).state.c_str();'
           capture_response: true
           on_response:
-            - logger.log:
-                format: "TRMNL Setup Response: %s"
-                args: [body.c_str()]
             - if:
                 condition:
-                  lambda: return response->status_code == 200;
+                  lambda: return response->status_code >= 200 && response->status_code < 300;
                 then:
+                  - logger.log:
+                      format: "TRMNL Setup Response: %s"
+                      args: [body.c_str()]
                   - lambda: |-
                       json::parse_json(body, [](JsonObject root) -> bool {
-                        id(api_key) = root["api_key"].as<std::string>();
-                        id(device_id) = root["friendly_id"].as<std::string>();
-                        global_preferences->sync();
+                        // ArduinoJson 7: проверяем существование ключа и сразу его тип
+                        if (root["api_key"].is<std::string>()) {
+                          id(api_key) = root["api_key"].as<std::string>();
+                          id(device_id) = root["friendly_id"].as<std::string>();
+                          global_preferences->sync();
+                        }
                         return true;
                       });
-                  - delay: 16ms  # lets the http_request component free up the reserved memory
+                  - delay: 16ms
                   - script.execute: trmnl_update
+                else:
+                  - logger.log:
+                      format: "TRMNL Setup Failed. HTTP Status: %d"
+                      args: [response->status_code]
+                  - script.execute: trmnl_error
           on_error:
-              - script.execute: trmnl_error
-              - deep_sleep.enter:
-                  sleep_duration: 600 s
+            - logger.log: "TRMNL Setup Connection Error / Timeout"
+            - script.execute: trmnl_error
 
 # curl http://192.168.1.123:80/api/display --header "access-token:xxxxxxxxxxxxxxxxxxxxxx"
 # Invoke-WebRequest -Uri "http://192.168.1.123:80/api/display" -Headers @{"access-token"="MnVGqCNfGhUPaDzJQMo24EFpSn12VaJh4DBRzztOpIw"}
@@ -242,48 +251,100 @@ script:
 #     "status": 0,
 #     "update_firmware": null
 # }
-  - id: trmnl_update
-    then:
-      - logger.log: "Updating TRMNL image"
-      - http_request.get:
-          url: ${server_ip}/api/display/
-          request_headers:
-            ID: !lambda 'return id(mac_address_sensor).state.c_str();'
-            Access-Token: !lambda 'return id(api_key).c_str();'
-            Battery-Voltage: !lambda 'return id(battery_voltage_text).state.c_str();'
-          capture_response: true
-          on_response:
-            - logger.log:
-                format: "TRMNL Update Response: %s"
-                args: [body.c_str()]
-            - lambda: |-
-                json::parse_json(body, [](JsonObject root) -> bool {
-                  if (root["status"].as<int>() == 0) {
-                    id(trmnl_image).set_url(root["image_url"].as<std::string>());
-                    id(sleep_time) = root["refresh_rate"].as<uint32_t>();
-                  }
-                  return true;
-                });
-            - delay: 16ms  # lets the http_request component free up the reserved memory
-            - component.update: trmnl_image
-          on_error:
-              - script.execute: trmnl_error
-              - deep_sleep.enter:
-                  sleep_duration: 600 s
 
-  - id: trmnl_error
+  - id: trmnl_update
     then:
       - if:
           condition:
-            api.connected:
+            switch.is_on: block_update_switch
           then:
-            - homeassistant.service:
-                service: persistent_notification.create
-                data:
-                  title: "⚠️ Ошибка ESPHome: $name"
-                  notification_id: "esphome_error" # Раскомментируйте, если хотите перезаписывать одно уведомление, а не плодить новые
-                data_template:
-                  message: "Компонент: {{ tag }}\nДетали ошибки: {{ message }}"
+            - logger.log: "Обновление дисплея заблокировано переключателем. Уходим в сон."
+            - script.execute:
+                id: safe_update_display
+                target_page: 3 # ID страницы pause_page
+                force_update: false
+            - delay: $deep_sleep_delay
+            - deep_sleep.enter:
+                sleep_duration: $sleep_time s
+          else:
+            - logger.log: "Updating TRMNL image"
+            - http_request.get:
+                url: ${server_url}/api/display/
+                request_headers:
+                  ID: !lambda 'return id(mac_address_sensor).state.c_str();'
+                  Access-Token: !lambda 'return id(api_key).c_str();'
+                  Battery-Voltage: !lambda 'return id(battery_voltage_text).state.c_str();'
+                capture_response: true
+                on_response:
+                  - if:
+                      condition:
+                        lambda: return response->status_code >= 200 && response->status_code < 300;
+                      then:
+                        - logger.log:
+                            format: "TRMNL Update Response: %s"
+                            args: [body.c_str()]
+                        - lambda: |-
+                            json::parse_json(body, [](JsonObject root) -> bool {
+                              if (root["status"].is<int>() && root["status"].as<int>() == 0) {
+                                id(trmnl_image).set_url(root["image_url"].as<std::string>());
+                                id(sleep_time) = root["refresh_rate"].as<uint32_t>();
+                              }
+                              return true;
+                            });
+                        - delay: 16ms
+                        - component.update: trmnl_image
+                      else:
+                        - logger.log:
+                            format: "TRMNL Update Failed. HTTP Status: %d"
+                            args: [response->status_code]
+                        - script.execute: trmnl_error
+                on_error:
+                  - logger.log: "TRMNL Update Connection Error / Timeout"
+                  - script.execute: trmnl_error
+
+  - id: trmnl_error
+    then:
+      - logger.log: "trmnl_error"
+      - script.execute:
+          id: safe_update_display
+          target_page: 2 # ID страницы failed
+          force_update: false
+      - delay: $deep_sleep_delay
+      - deep_sleep.enter:
+          sleep_duration: $error_sleep_duration s
+
+  - id: safe_update_display
+    parameters:
+      target_page: uint8_t
+      force_update: bool
+    then:
+      - if:
+          condition:
+            or:
+              - lambda: 'return id(current_page_id) != target_page;'
+              - lambda: 'return force_update;'
+          then:
+            - delay: 16ms
+            - lambda: |-
+                id(current_page_id) = target_page; // Запоминаем/подтверждаем новую страницу
+                if (target_page == 1) {
+                  id(trmnl_display).show_page(id(trmnl_page));
+                  ESP_LOGD("display", "Обновление экрана: trmnl_page");
+                } else if (target_page == 2) {
+                  id(trmnl_display).show_page(id(failed));
+                  ESP_LOGD("display", "Обновление экрана: failed");
+                } else if (target_page == 3) {
+                  id(trmnl_display).show_page(id(pause_page));
+                  ESP_LOGD("display", "Обновление экрана: pause_page");
+                }
+            - delay: 16ms
+            - component.update: trmnl_display
+            - delay: $deep_sleep_delay
+            - deep_sleep.enter:
+                sleep_duration: $sleep_time s #!lambda 'return id(sleep_time) * 1000;'
+
+          else:
+            - logger.log: "Экран уже отображает эту страницу, перерисовка пропущена."
 
 spi:
   clk_pin: $clk_pin
@@ -304,32 +365,13 @@ display:
   pages:
     - id: trmnl_page
       lambda: |-
-        it.image(0, 0, id(trmnl_image), COLOR_ON, COLOR_OFF);
-    - id: logo
-      lambda: |-
-        it.image(0, 0, id(trmnl_logo));
-    - id: wifi_connect
-      lambda: |-
-        // Factory firmware draws at X: 640, Y: 337 and dimensions of 130x130
-        auto size = id(wifi_connect_qr).get_size() * 2;
-        auto x = (it.get_width() / 2) - (size / 2);
-        auto y = (it.get_height() / 2) - (size / 2);
-        it.qr_code(x, y, id(wifi_connect_qr), COLOR_ON, 2);
-    - id: wifi_failed
-      lambda: |-
-        // Factory firmware draws at X: 640, Y: 337 and dimensions of 130x130
-        auto size = id(wifi_failed_qr).get_size() * 2;
-        auto x = (it.get_width() / 2) - (size / 2);
-        auto y = (it.get_height() / 2) - (size / 2);
-        it.qr_code(x, y, id(wifi_failed_qr), COLOR_ON, 2);
+        it.image(0, 0, id(trmnl_image), COLOR_OFF, COLOR_ON);
 
-    - id: main_page
+    - id: failed
       lambda: |-
-        it.print(100, 100, id(roboto_32), "Hello ESPHome on TRMNL!");
-        it.printf(100, 200, id(roboto_32), "Uptime: %d seconds", millis() / 1000);
+        it.fill(COLOR_OFF);
 
-        it.printf(750, 430, id(roboto_16), TextAlign::BOTTOM_RIGHT, "Battery: %.2fV", id(battery_voltage).state);
-    - id: blank_page
+    - id: pause_page
       lambda: |-
         it.fill(COLOR_ON);
 
@@ -337,9 +379,11 @@ button:
   - platform: factory_reset
     name: "Factory Reset"
     id: factory_reset_button
+
   - platform: restart
     name: "Перезагрузка"
     id: restart_button
+
 
 binary_sensor:
 
@@ -365,35 +409,43 @@ binary_sensor:
           - ON for at least 0.3s
           - OFF for at least 0.5s
         then:
-          - script.execute: trmnl_update
-
-  - platform: status
-    name: "Статус"
-
+          - button.press: restart_button
+    
 sensor:
   - platform: adc
     name: "Напряжение батареи"
     icon: "mdi:alpha-v-cirde"
+    entity_category: "diagnostic"
     id: battery_voltage
     pin: $adc_pin
     attenuation: 12db
     samples: 128
+    # sampling_mode: min
     filters:
-      - multiply: 2.21925
+      - multiply: 2
+      - round: 2
+      # - calibrate_linear:
+      #     - 0.0 -> 0.0
+      #     - 3.70 -> 4.143
+      #     - 3.86 -> 4.157 усб
     on_value:
       - text_sensor.template.publish:
           id: battery_voltage_text
           state: !lambda 'return str_sprintf("%.2f", x).c_str();'
+      - mqtt.publish:
+          topic: "$name/sensor/battery_voltage/state"
+          payload: !lambda 'return to_string(x);'
+          retain: true
+    internal: true 
 
-  - platform: template
+  - platform: copy
+    id: battery_voltage_prc
     name: "Уровень заряда батареи"
-    id: battery_level
+    source_id: battery_voltage
     unit_of_measurement: "%"
     icon: "mdi:battery"
     device_class: battery
     state_class: measurement
-    lambda: 'return id(battery_voltage).state;'
-    update_interval: never
     filters:
       - calibrate_linear:
           - 4.20 -> 100
@@ -401,18 +453,35 @@ sensor:
           - 3.75 -> 80
           - 3.50 -> 20
           - 3.00 -> 0
+      - round: 0
       - clamp:
           min_value: 0
           max_value: 100
+    accuracy_decimals: 0
+    internal: true 
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: "$name/sensor/battery_voltage_prc/state"
+            payload: !lambda 'return to_string(x);'
+            retain: true
 
   - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
     name: "Сигнал Wi-Fi, dB"
     id: wifi_signal_db
     update_interval: never
     entity_category: "diagnostic"
-    internal: True
+    disabled_by_default: true
+    internal: true 
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: "$name/sensor/wifi_signal_db/state"
+            payload: !lambda 'return to_string(x);'
+            retain: true
 
   - platform: copy # Reports the WiFi signal strength in %
+    id: wifi_signal_db_prc
     source_id: wifi_signal_db
     name: "Сигнал Wi-Fi"
     filters:
@@ -420,7 +489,14 @@ sensor:
     unit_of_measurement: "%"
     entity_category: "diagnostic"
     device_class: ""
-
+    internal: true 
+    on_value:
+      then:
+        - mqtt.publish:
+            topic: "$name/sensor/wifi_signal_db_prc/state"
+            payload: !lambda 'return to_string(x);'
+            retain: true
+    
 text_sensor:
   - platform: wifi_info
     mac_address:
@@ -428,3 +504,12 @@ text_sensor:
   - platform: template
     id: battery_voltage_text
     update_interval: never
+
+switch:
+  - platform: template
+    name: "Блокировка обновления дисплея"
+    id: block_update_switch
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF # По умолчанию блокировка выключена
+    icon: "mdi:monitor-off"
+    entity_category: config
