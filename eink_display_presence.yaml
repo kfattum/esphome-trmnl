@@ -1,0 +1,108 @@
+blueprint:
+  name: Управление e-ink дисплеем по присутствию
+  description: >
+    При появлении дисплея в сети останавливает обновление дисплея (включает переключатель), когда никого нет дома или в комнате и возобновляет обновление (выключает переключатель), когда кто-то дома/в комнате.
+  domain: automation
+  input:
+    display_switch:
+      name: Переключатель обновления экрана
+      description: Объект switch, который при включении (ON) останавливает обновление экрана.
+      selector:
+        entity:
+          domain: switch
+    display_area:
+      name: Комната дисплея
+      description: Выберите зону (area), в которой физически установлен этот дисплей.
+      selector:
+        area:
+    persons:
+      name: Датчики присутствия дома
+      description: Объекты person или device_tracker. Если хотя бы один из них 'home', считается, что дома кто-то есть.
+      selector:
+        entity:
+          multiple: true
+          domain: [person, device_tracker]
+    use_room_tracking:
+      name: Использовать отслеживание по комнатам?
+      description: Если выключено, дисплей будет работать всегда, когда кто-то есть дома (игнорируя датчики комнат).
+      default: true
+      selector:
+        boolean:
+    room_sensors:
+      name: Сенсоры комнат (Bermuda)
+      description: Выберите сенсоры браслетов/телефонов (например, sensor.mi_smart_band_4_area). Blueprint будет проверять атрибут 'area_id'.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          domain: sensor
+
+variables:
+  persons_var: !input persons
+  room_sensors_var: !input room_sensors
+  display_area_var: !input display_area
+  use_room_tracking_var: !input use_room_tracking
+
+  # Проверяем, есть ли хоть кто-то дома
+  is_anyone_home: >
+    {{ expand(persons_var) | selectattr('state', 'in', ['home', 'on']) | list | count > 0 }}
+
+  # Проверяем, совпадает ли атрибут area_id у сенсоров с выбранной комнатой экрана
+  is_anyone_in_room: >
+    {{ expand(room_sensors_var) | selectattr('attributes.area_id', 'eq', display_area_var) | list | count > 0 }}
+
+  # Итоговая логика: должен ли экран обновляться?
+  should_update: >
+    {% if not is_anyone_home %}
+      false
+    {% elif use_room_tracking_var %}
+      {{ 'true' if is_anyone_in_room else 'false' }}
+    {% else %}
+      true
+    {% endif %}
+
+trigger:
+  # Триггеры на изменение статуса людей (пришел/ушел)
+  #- platform: state
+  #  entity_id: !input persons
+  
+  # Триггеры на изменение статуса сенсоров комнат (перешел в другую комнату)
+  #- platform: state
+  #  entity_id: !input room_sensors
+  
+  # Триггер на появление самого переключателя дисплея в сети
+  - platform: state
+    entity_id: !input display_switch
+    from:
+      - "unavailable"
+      - "unknown"
+    to:
+      - "on"
+      - "off"
+      
+  # Дополнительный триггер при запуске Home Assistant
+  #- platform: homeassistant
+  #  event: start
+
+action:
+  - choose:
+      # Условие 1: Экран должен обновляться (Выключаем свитч сна/блокировки)
+      - conditions:
+          - condition: template
+            value_template: "{{ should_update == 'true' }}"
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: !input display_switch
+              
+      # Условие 2: Экран не должен обновляться (Включаем свитч сна/блокировки)
+      - conditions:
+          - condition: template
+            value_template: "{{ should_update == 'false' }}"
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input display_switch
+
+mode: queued
+max: 5
