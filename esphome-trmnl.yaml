@@ -1,44 +1,51 @@
 substitutions:
-  server_url: "http://192.168.1.123:80" #http://192.168.1.119:4567
-  mqtt_broker_ip: "192.168.1.100"
-  manual_ip_static_ip: "192.168.1.222"
-  manual_ip_gateway: "192.168.1.1"
-  manual_ip_subnet: "255.255.255.0"
-  name: "trmnl"
-  friendly_name: "TRMNL"
-  status_led: GPIO2
+  server_url: "http://192.168.1.123:80" # url inker
+  mqtt_broker_ip: "192.168.1.100" # ip Mosquitto broker 
+  manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
+  manual_ip_gateway: "192.168.1.1" # Шлюз локальной сети
+  manual_ip_subnet: "255.255.255.0" # Подсеть локальной сети
+
+  name: "trmnl" # Это имя дисплея. Может содержать только строчные буквы, цифры и дефисы и по умолчанию может иметь длину не более 24
+  friendly_name: "TRMNL" # Это имя отбражается в интерфейсе и используется Home Assistant в качестве имени интеграции и устройства.
+  model: 7.50in-bV3 # Модель дисплея
+  wifi_output_power: 8.5dB # Величина мощности передачи для интерфейса Wi-Fi от 8,5 dB до 20,5 dB
+
+  img_type: BINARY # Указывает способ внутреннего кодирования изображения.
+  img_format: PNG # формат, в котором закодировано изображение.
+  img_url_setup_logo: http://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/setup-logo.bmp # изображение заглушка
+
+  deep_sleep_delay: 1000ms # Задержка перед сном для обновления экрана 
+  sleep_time: "3600" # (сек.) Время сна экрана по умолчанию 
+  error_sleep_duration: "1200" # (сек.) Время сна экрана при возникновении ошибки
+  reset_duration: 200 ms # Длительность операции сброса дисплея
+  wifi_connect_delay: 15s # Время на попытку подключения к wifi
+  mqtt_connect_delay: 500ms # Время на попытку подключения к MQTT
+
+  # status_led: GPIO2
   button: GPIO32
   adc_pin: GPIO34
   deep_sleep_pin: GPIO32
-  deep_sleep_delay: 1000ms #Задержка перед сном для обновления экрана 
-  sleep_time: "3600" # sec
-  error_sleep_duration: "1200" # sec
-  # img
-  img_type: BINARY
-  img_format: PNG
-  img_url_setup_logo: http://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/setup-logo.bmp
-  # eink_display
-  cs_pin: GPIO15
-  dc_pin: GPIO27
-  busy_pin: GPIO25
-  reset_pin: GPIO26   
-  reset_duration: 200 ms
-  model: 7.50in-bV3       #✅7.50in-bV2 ✅7.50in-bV3 ❌7.50in-bV3-bwr(много ест оперативки)
-  # spi
+
   clk_pin: GPIO13
   mosi_pin: GPIO14
+
+  cs_pin: GPIO15
+  dc_pin: GPIO27
+  busy_pin: GPIO25 #Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
+  reset_pin: GPIO26   
+
 
 globals:
   - id: device_id
     type: std::string
     max_restore_data_length: 13
     restore_value: true
-    initial_value: '""' # bold-eagle-15
+    initial_value: '""'
   - id: api_key
     type: std::string
     max_restore_data_length: 43
     restore_value: true
-    initial_value: '""' # MnVGqCNfGhUPaDzJQMo24EFpSn12VaJh4DBRzztOpIw
+    initial_value: '""'
   - id: sleep_time
     type: uint32_t
     restore_value: true
@@ -58,42 +65,21 @@ esphome:
   min_version: 2026.1.3 #https://github.com/esphome/esphome/pull/13599
   name: $name
   friendly_name: $friendly_name
-  # platformio_options:
-  #   board_build.f_flash: 80000000L
-  # Automatically add the mac address to the name
-  # so you can use a single firmware for all devices
-  # name_add_mac_suffix: true
-  # Dynamically set QR Code value for connecting to captive portal
+  name_add_mac_suffix: true # Автоматически добавляет MAC-адрес к имени, чтобы можно было использовать одну прошивку для всех устройств / Automatically add the mac address to the name so you can use a single firmware for all devices
   on_boot:
     priority: -10
     then:
-      - delay: 15s # Даем время на попытку подключения
+      - delay: $wifi_connect_delay
       - if:
           condition:
             not:
               wifi.connected:
           then:
             - script.execute: trmnl_error
-  #   - priority: 600
-  #     then:
-  #       - lambda: |-
-  #           id(wifi_connect_qr).set_value("WIFI:T:nopass;S:" + App.get_name() + ";;");
-  # This will allow for project identification,
-  # configuration and updates.
-  # project:
-  #   name: jesserockz.trmnl
-  #   version: dev # This will be replaced by the github workflows with the `release` version
 
-# This should point to the public location of the yaml file that will be adopted.
-# In this case it is the core yaml file that does not contain the extra things
-# that are provided by this factory yaml file as the user does not need these once adopted.
-# dashboard_import:
-#   package_import_url: github://jesserockz/esphome-trmnl/trmnl.yaml@main
-
-# Sets up Bluetooth LE (Only on ESP32) to allow the user
-# to provision wifi credentials to the device.
-# esp32_improv:
-#   authorizer: none
+  project:
+    name: ESPHome-TRMNL 7.5"
+    version: "1.0.0"
 
 # To be able to get logs from the device via serial and api.
 logger:
@@ -102,15 +88,12 @@ logger:
     then:
       - script.execute: trmnl_error
 
-# Example configuration entry
 mqtt:
   broker: $mqtt_broker_ip
   username: $name
   password: !secret mqtt_password
   on_connect:
-    - delay: 500ms
-    # - component.update: battery_voltage
-    # - component.update: wifi_signal_db
+    - delay: $mqtt_connect_delay
     - if:
         condition:
           lambda: |-
@@ -119,17 +102,6 @@ mqtt:
           - script.execute: trmnl_setup
         else:
           - script.execute: trmnl_update
-
-  # birth_message:
-  #   topic: trmnl/status
-  #   payload:
-  # will_message:
-  #   topic: trmnl/status
-  #   payload: 
-
-# ota:
-#   - platform: esphome
-#     password: !secret ota_password
     
 mdns:
   disabled: true
@@ -143,21 +115,11 @@ wifi:
   min_auth_mode: WPA2
   power_save_mode: LIGHT
   fast_connect: true # -5 сек
-  output_power: 8.5dB
+  output_power: $wifi_output_power
   manual_ip: 
     static_ip: $manual_ip_static_ip  # -3 сек 
     gateway: $manual_ip_gateway
     subnet: $manual_ip_subnet
-
-          
-  # Включите резервную точку доступа (captive portal) на случай сбоя Wi-Fi-соединения
-  # ap:
-  #   ssid: $name
-  #   password: !secret hotspot_password
-
-# In combination with the `ap` this allows the user
-# to provision wifi credentials to the device.
-# captive_portal:
 
 http_request:
   buffer_size_tx: 2048
@@ -218,7 +180,6 @@ script:
                       args: [body.c_str()]
                   - lambda: |-
                       json::parse_json(body, [](JsonObject root) -> bool {
-                        // ArduinoJson 7: проверяем существование ключа и сразу его тип
                         if (root["api_key"].is<std::string>()) {
                           id(api_key) = root["api_key"].as<std::string>();
                           id(device_id) = root["friendly_id"].as<std::string>();
@@ -238,7 +199,7 @@ script:
             - script.execute: trmnl_error
 
 # curl http://192.168.1.123:80/api/display --header "access-token:xxxxxxxxxxxxxxxxxxxxxx"
-# Invoke-WebRequest -Uri "http://192.168.1.123:80/api/display" -Headers @{"access-token"="MnVGqCNfGhUPaDzJQMo24EFpSn12VaJh4DBRzztOpIw"}
+# Invoke-WebRequest -Uri "http://192.168.1.123:80/api/display" -Headers @{"access-token"="xxxxxxxxxxxxxxxxxxxxxx"}
 
 # /api/display
 # {
@@ -258,7 +219,7 @@ script:
           condition:
             switch.is_on: block_update_switch
           then:
-            - logger.log: "Обновление дисплея заблокировано переключателем. Уходим в сон."
+            - logger.log: "Обновление дисплея заблокировано переключателем"
             - script.execute:
                 id: safe_update_display
                 target_page: 3 # ID страницы pause_page
@@ -357,7 +318,7 @@ display:
   dc_pin: $dc_pin
   busy_pin: 
     number: $busy_pin
-    inverted: true #Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
+    inverted: true # Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
   reset_pin: $reset_pin
   reset_duration: $reset_duration
   model: $model
@@ -369,15 +330,25 @@ display:
 
     - id: failed
       lambda: |-
-        it.fill(COLOR_OFF);
+        // Выводим текст ровно по центру дисплея по обеим осям
+        // it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font),"Error");
+        it.print(325, 202, id(pixel_font), COLOR_ON, "Error");
 
     - id: pause_page
       lambda: |-
-        it.fill(COLOR_ON);
+        it.filled_rectangle(427, 160, 53, 160, COLOR_ON);
+
+        it.filled_rectangle(324, 160, 53, 160, COLOR_ON);
+
+font:
+  - file: "https://github.com/IdreesInc/Monocraft/releases/download/v3.0/Monocraft.ttf"
+    id: pixel_font
+    size: 64 
+    glyphs: "Ero"
 
 button:
   - platform: factory_reset
-    name: "Factory Reset"
+    name: "Сброс"
     id: factory_reset_button
 
   - platform: restart
@@ -510,6 +481,6 @@ switch:
     name: "Блокировка обновления дисплея"
     id: block_update_switch
     optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF # По умолчанию блокировка выключена
+    restore_mode: RESTORE_DEFAULT_OFF
     icon: "mdi:monitor-off"
     entity_category: config
