@@ -1,25 +1,25 @@
 substitutions:
   server_url: "http://192.168.1.123:80" # url inker
   mqtt_broker_ip: "192.168.1.100" # ip Mosquitto broker 
-  manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
-  manual_ip_gateway: "192.168.1.1" # Шлюз локальной сети
-  manual_ip_subnet: "255.255.255.0" # Подсеть локальной сети
+  manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея / Static IP address of the display
+  manual_ip_gateway: "192.168.1.1" # Шлюз локальной сети / Local network gateway
+  manual_ip_subnet: "255.255.255.0" # Подсеть локальной сети / Local network subnet
 
-  name: "trmnl" # Это имя дисплея. Может содержать только строчные буквы, цифры и дефисы и по умолчанию может иметь длину не более 24
-  friendly_name: "TRMNL" # Это имя отбражается в интерфейсе и используется Home Assistant в качестве имени интеграции и устройства.
-  model: 7.50in-bV3 # Модель дисплея
-  wifi_output_power: 8.5dB # Величина мощности передачи для интерфейса Wi-Fi от 8,5 dB до 20,5 dB
+  name: "trmnl" # Это имя дисплея. Может содержать только строчные буквы, цифры и дефисы и по умолчанию может иметь длину не более 24 / This is the display name. It can only contain lowercase letters, numbers, and hyphens, and by default can have a maximum length of 24
+  friendly_name: "TRMNL" # Это имя отбражается в интерфейсе и используется Home Assistant в качестве имени интеграции и устройства. / This name is displayed in the interface and is used by Home Assistant as the integration and device name.
+  model: 7.50in-bV3 # Модель дисплея / Display model
+  wifi_output_power: 8.5dB # Величина мощности передачи для интерфейса Wi-Fi от 8,5 dB до 20,5 dB / Transmit power value for the Wi-Fi interface from 8.5 dB to 20.5 dB
 
-  img_type: BINARY # Указывает способ внутреннего кодирования изображения.
-  img_format: PNG # формат, в котором закодировано изображение.
-  img_url_setup_logo: http://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/setup-logo.bmp # изображение заглушка
+  img_type: BINARY # Указывает способ внутреннего кодирования изображения. / Indicates the internal image encoding method.
+  img_format: PNG # формат, в котором закодировано изображение. / the format in which the image is encoded.
+  img_url_setup_logo: http://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/setup-logo.bmp # изображение заглушка / placeholder image
 
-  deep_sleep_delay: 1000ms # Задержка перед сном для обновления экрана 
-  sleep_time: "3600" # (сек.) Время сна экрана по умолчанию 
-  error_sleep_duration: "1200" # (сек.) Время сна экрана при возникновении ошибки
-  reset_duration: 200 ms # Длительность операции сброса дисплея
-  wifi_connect_delay: 15s # Время на попытку подключения к wifi
-  mqtt_connect_delay: 500ms # Время на попытку подключения к MQTT
+  deep_sleep_delay: 1000ms # Задержка перед сном для обновления экрана / Delay before sleep for screen update
+  sleep_time: "3600" # (сек.) Время сна экрана по умолчанию / (sec.) Default screen sleep time
+  error_sleep_duration: "1200" # (сек.) Время сна экрана при возникновении ошибки / (sec.) Screen sleep time when an error occurs
+  reset_duration: 200 ms # Длительность операции сброса дисплея / Duration of the display reset operation
+  wifi_connect_delay: 15s # Время на попытку подключения к wifi / Time to attempt Wi-Fi connection
+  mqtt_connect_delay: 500ms # Время на обновление переключателя / Time to update the switch
 
   # status_led: GPIO2
   button: GPIO32
@@ -31,9 +31,8 @@ substitutions:
 
   cs_pin: GPIO15
   dc_pin: GPIO27
-  busy_pin: GPIO25 #Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
+  busy_pin: GPIO25 #Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках / To prevent irreversible damage to the display, the BUSY pin must be inverted on models gdew0154m09, Waveshare 7.30in-f and Waveshare 7.50in V2 (and probably on V3 and other new models). Set the busy pin to inverted: true in the settings
   reset_pin: GPIO26   
-
 
 globals:
   - id: device_id
@@ -53,13 +52,13 @@ globals:
   - id: current_page_id
     type: uint8_t
     restore_value: true
-    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page
+    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page 
 
 esp32:
   board: az-delivery-devkit-v4
   framework:
     type: esp-idf
-  cpu_frequency: 240MHz
+  cpu_frequency: 160MHz
 
 esphome:
   min_version: 2026.1.3 #https://github.com/esphome/esphome/pull/13599
@@ -114,10 +113,10 @@ wifi:
   password: !secret wifi_password
   min_auth_mode: WPA2
   power_save_mode: LIGHT
-  fast_connect: true # -5 сек
+  fast_connect: true # -5 сек / -5 sec
   output_power: $wifi_output_power
   manual_ip: 
-    static_ip: $manual_ip_static_ip  # -3 сек 
+    static_ip: $manual_ip_static_ip  # -3 сек / -3 sec 
     gateway: $manual_ip_gateway
     subnet: $manual_ip_subnet
 
@@ -222,7 +221,7 @@ script:
             - logger.log: "Обновление дисплея заблокировано переключателем"
             - script.execute:
                 id: safe_update_display
-                target_page: 3 # ID страницы pause_page
+                target_page: 3 # ID страницы pause_page / ID of the pause_page
                 force_update: false
             - delay: $deep_sleep_delay
             - deep_sleep.enter:
@@ -268,7 +267,7 @@ script:
       - logger.log: "trmnl_error"
       - script.execute:
           id: safe_update_display
-          target_page: 2 # ID страницы failed
+          target_page: 2 # ID страницы failed / ID of the failed page
           force_update: false
       - delay: $deep_sleep_delay
       - deep_sleep.enter:
@@ -287,7 +286,7 @@ script:
           then:
             - delay: 16ms
             - lambda: |-
-                id(current_page_id) = target_page; // Запоминаем/подтверждаем новую страницу
+                id(current_page_id) = target_page; // Запоминаем/подтверждаем новую страницу / Remember/confirm the new page
                 if (target_page == 1) {
                   id(trmnl_display).show_page(id(trmnl_page));
                   ESP_LOGD("display", "Обновление экрана: trmnl_page");
@@ -318,7 +317,7 @@ display:
   dc_pin: $dc_pin
   busy_pin: 
     number: $busy_pin
-    inverted: true # Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
+    inverted: true # Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках / To prevent irreversible damage to the display, the BUSY pin must be inverted on models gdew0154m09, Waveshare 7.30in-f and Waveshare 7.50in V2 (and probably on V3 and other new models). Set the busy pin to inverted: true in the settings
   reset_pin: $reset_pin
   reset_duration: $reset_duration
   model: $model
@@ -330,7 +329,7 @@ display:
 
     - id: failed
       lambda: |-
-        // Выводим текст ровно по центру дисплея по обеим осям
+        // Выводим текст ровно по центру дисплея по обеим осям / Display text exactly in the center of the display on both axes
         // it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font),"Error");
         it.print(325, 202, id(pixel_font), COLOR_ON, "Error");
 
@@ -398,7 +397,7 @@ sensor:
       # - calibrate_linear:
       #     - 0.0 -> 0.0
       #     - 3.70 -> 4.143
-      #     - 3.86 -> 4.157 усб
+      #     - 3.86 -> 4.157
     on_value:
       - text_sensor.template.publish:
           id: battery_voltage_text
