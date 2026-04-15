@@ -1,4 +1,5 @@
 substitutions:
+  fw_version: "1.0.0 esphome-trmnl"
   server_url: "http://192.168.1.123:80" # url inker
   mqtt_broker_ip: "192.168.1.100" # ip Mosquitto broker 
   manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
@@ -60,7 +61,7 @@ esp32:
   board: az-delivery-devkit-v4
   framework:
     type: esp-idf
-  cpu_frequency: 240MHz
+  cpu_frequency: 160MHz
 
 esphome:
   min_version: 2026.1.3 #https://github.com/esphome/esphome/pull/13599
@@ -80,7 +81,7 @@ esphome:
 
   project:
     name: "kfattum.esphome-trmnl"
-    version: "1.0.0"
+    version: "$fw_version"
 
 # To be able to get logs from the device via serial and api.
 # debug:
@@ -110,6 +111,8 @@ mqtt:
     
 mdns:
   disabled: true
+
+improv_serial:
 
 wifi:
   ssid: !secret wifi_ssid
@@ -237,6 +240,9 @@ script:
                   ID: !lambda 'return id(mac_address_sensor).state.c_str();'
                   Access-Token: !lambda 'return id(api_key).c_str();'
                   Battery-Voltage: !lambda 'return id(battery_voltage_text).state.c_str();'
+                  Refresh-Rate: !lambda 'return std::to_string(id(sleep_time)).c_str();'
+                  FW-Version: !lambda 'return "$fw_version";'
+                  RSSI: !lambda 'return id(rssi_text).state.c_str();'
                 capture_response: true
                 on_response:
                   - if:
@@ -435,6 +441,10 @@ sensor:
     update_interval: never
     entity_category: "diagnostic"
     disabled_by_default: true
+    on_value:
+      - text_sensor.template.publish:
+          id: rssi_text
+          state: !lambda 'return str_sprintf("%.0f", x).c_str();'
 
   - platform: copy # Reports the WiFi signal strength in %
     id: wifi_signal_db_prc
@@ -452,6 +462,9 @@ text_sensor:
       id: mac_address_sensor
   - platform: template
     id: battery_voltage_text
+    update_interval: never
+  - platform: template
+    id: rssi_text
     update_interval: never
 
 switch:
