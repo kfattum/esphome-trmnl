@@ -1,5 +1,5 @@
 substitutions:
-  fw_version: "1.0.0 esphome-trmnl"
+  fw_version: "1.0.1 esphome-trmnl"
   server_url: "http://192.168.1.123:80" # url inker
   mqtt_broker_ip: "192.168.1.100" # ip Mosquitto broker 
   manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
@@ -7,7 +7,7 @@ substitutions:
   manual_ip_subnet: "255.255.255.0" # Подсеть локальной сети
 
   name: "trmnl" # Это имя дисплея. Может содержать только строчные буквы, цифры и дефисы и по умолчанию может иметь длину не более 24
-  friendly_name: "TRMNL" # Это имя отбражается в интерфейсе и используется Home Assistant в качестве имени интеграции и устройства.
+  friendly_name: "TRMNL" # Это имя отображается в интерфейсе и используется Home Assistant в качестве имени интеграции и устройства.
   model: 7.50in-bV3 # Модель дисплея
   wifi_output_power: 8.5dB # Величина мощности передачи для интерфейса Wi-Fi от 8,5 dB до 20,5 dB
 
@@ -231,7 +231,7 @@ script:
                 force_update: false
             - delay: $deep_sleep_delay
             - deep_sleep.enter:
-                sleep_duration: $sleep_time s
+                sleep_duration: !lambda 'return id(sleep_time) * 1000;'
           else:
             - logger.log: "Updating TRMNL image"
             - http_request.get:
@@ -310,7 +310,7 @@ script:
             - component.update: trmnl_display
             - delay: $deep_sleep_delay
             - deep_sleep.enter:
-                sleep_duration: $sleep_time s #!lambda 'return id(sleep_time) * 1000;'
+                sleep_duration: !lambda 'return id(sleep_time) * 1000;'
 
           else:
             - logger.log: "Экран уже отображает эту страницу, перерисовка пропущена."
