@@ -14,3 +14,15 @@ A repository for an ESPHome-based e-ink display project designed to display data
 
 **Документация:** [RU](https://3dpm.ru/open_projects/ESPHome-TRMNL_7+5/)
 
+``` mermaid
+flowchart LR
+    HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
+    RSS["RSS-каналы"] --> Inker
+    Inker -- PNG --> ESPH["ESPHome <br> E-Ink дисплей"]
+    HA <--> MQTT_Int["интеграция <br> MQTT"]
+    HA --> BP["blueprint"]
+    BP --> MQTT_Int
+    MQTT_Int <--> Mosq["Mosquitto <br> broker"]
+    Mosq <-- MQTT --> ESPH
+```
+
