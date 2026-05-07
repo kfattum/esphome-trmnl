@@ -7,22 +7,20 @@
 
 A repository for an ESPHome-based e-ink display project designed to display data from your [inker](https://github.com/usetrmnl/inker) ~~TRMNL BYOD~~ server and controlled by Home Assistant.
 
-**Documentation:** [EN](https://3dpm.ru/en/open_projects/ESPHome-TRMNL_7+5/)
-
----
-Репозиторий проекта E-ink дисплея на ESPHome, предназначенного для отображения данных с вашего сервера [inker](https://github.com/usetrmnl/inker) ~~TRMNL BYOD~~ и управляемый Home Assistant.
-
-**Документация:** [RU](https://3dpm.ru/open_projects/ESPHome-TRMNL_7+5/)
-
+**Documentation:** [EN](https://3dpm.ru/en/open_projects/ESPHome-TRMNL_7+5/) | [RU](https://3dpm.ru/open_projects/ESPHome-TRMNL_7+5/)
 ``` mermaid
 flowchart LR
     HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
-    RSS["RSS-каналы"] --> Inker
-    Inker -- PNG --> ESPH["ESPHome <br> E-Ink дисплей"]
-    HA <--> MQTT_Int["интеграция <br> MQTT"]
+    RSS["RSS Feeds"] --> Inker
+    Inker -- PNG --> ESPH["ESPHome <br> E-Ink Display"]
+    HA <--> MQTT_Int["MQTT <br> Integration"]
     HA --> BP["blueprint"]
     BP --> MQTT_Int
     MQTT_Int <--> Mosq["Mosquitto <br> broker"]
     Mosq <-- MQTT --> ESPH
 ```
+
+
+ 
+
 
