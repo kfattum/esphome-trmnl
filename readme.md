@@ -1,3 +1,4 @@
+**English** | [Русский](readme.ru.md)
 <table>
     <tr>
         <td><img width="1440" height="1080" alt="DSC00163" src="https://github.com/user-attachments/assets/c8ebdde8-9719-4faf-894d-5d4061a223ab" /></td>
