@@ -1,6 +1,6 @@
 substitutions:
-  fw_version: "1.0.1 esphome-trmnl"
-  server_url: "http://192.168.1.123:80" # url inker
+  fw_version: "1.1.2 esphome-trmnl"
+  server_url: "http://192.168.1.100:80" # url inker
   mqtt_broker_ip: "192.168.1.100" # ip Mosquitto broker 
   manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
   manual_ip_gateway: "192.168.1.1" # Шлюз локальной сети
@@ -55,6 +55,9 @@ globals:
     type: uint8_t
     restore_value: true
     initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page
+  - id: ota_mod
+    type: bool
+    initial_value: "false"
 
 esp32:
   variant: ESP32
@@ -67,17 +70,29 @@ esphome:
   min_version: 2026.1.3 #https://github.com/esphome/esphome/pull/13599
   name: $name
   friendly_name: $friendly_name
-  name_add_mac_suffix: true # Автоматически добавляет MAC-адрес к имени, чтобы можно было использовать одну прошивку для всех устройств / Automatically add the mac address to the name so you can use a single firmware for all devices
   on_boot:
     priority: -10
     then:
-      - delay: $wifi_connect_delay
+      # Проверяем, зажата ли кнопка при включении (пин GPIO32)
       - if:
           condition:
-            not:
-              wifi.connected:
+            lambda: 'return id(back_button).state;' 
           then:
-            - script.execute: trmnl_error
+            - logger.log: "Кнопка зажата при старте! Вход в режим OTA."
+            - lambda: 'id(ota_mod) = true;'
+            - script.execute:
+                id: safe_update_display
+                target_page: 4 # Страница OTA MODE
+                force_update: false
+          else:
+            # Обычный запуск
+            - delay: $wifi_connect_delay
+            - if:
+                condition:
+                  not:
+                    wifi.connected:
+                then:
+                  - script.execute: trmnl_error
 
   project:
     name: "kfattum.esphome-trmnl"
@@ -94,6 +109,10 @@ logger:
     then:
       - script.execute: trmnl_error
 
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
 mqtt:
   broker: $mqtt_broker_ip
   username: $name
@@ -101,14 +120,21 @@ mqtt:
   on_connect:
     - delay: $mqtt_connect_delay
     - if:
+        # Проверяем: если OTA режим НЕ активен (false), тогда идем дальше
         condition:
-          lambda: |-
-            return id(device_id).empty() || id(api_key).empty();
+          lambda: 'return !id(ota_mod);'
         then:
-          - script.execute: trmnl_setup
+          - if:
+              condition:
+                lambda: |-
+                  return id(device_id).empty() || id(api_key).empty();
+              then:
+                - script.execute: trmnl_setup
+              else:
+                - script.execute: trmnl_update
         else:
-          - script.execute: trmnl_update
-    
+          - logger.log: "MQTT подключен, но выполнение скриптов заблокировано (активен OTA MODE)"
+
 mdns:
   disabled: true
 
@@ -137,7 +163,7 @@ deep_sleep:
     number: $deep_sleep_pin
     allow_other_uses: true  
     inverted: true 
-  run_duration: 2 min
+  run_duration: 30 min
   sleep_duration: $error_sleep_duration s
 
 online_image:
@@ -243,6 +269,7 @@ script:
                   Refresh-Rate: !lambda 'return std::to_string(id(sleep_time)).c_str();'
                   FW-Version: !lambda 'return "$fw_version";'
                   RSSI: !lambda 'return id(rssi_text).state.c_str();'
+                  Screen-Design-ID-Override: !lambda 'return id(screen_design_id_override).state.c_str();'
                 capture_response: true
                 on_response:
                   - if:
@@ -273,14 +300,19 @@ script:
 
   - id: trmnl_error
     then:
-      - logger.log: "trmnl_error"
-      - script.execute:
-          id: safe_update_display
-          target_page: 2 # ID страницы failed
-          force_update: false
-      - delay: $deep_sleep_delay
-      - deep_sleep.enter:
-          sleep_duration: $error_sleep_duration s
+      - if:
+          condition:
+            lambda: 'return !id(ota_mod);'
+          then:
+            - script.execute:
+                id: safe_update_display
+                target_page: 2
+                force_update: false
+            - delay: $deep_sleep_delay
+            - deep_sleep.enter:
+                sleep_duration: $error_sleep_duration s
+          else:
+            - logger.log: "Ошибка произошла в OTA режиме, сон отменен."
 
   - id: safe_update_display
     parameters:
@@ -305,12 +337,19 @@ script:
                 } else if (target_page == 3) {
                   id(trmnl_display).show_page(id(pause_page));
                   ESP_LOGD("display", "Обновление экрана: pause_page");
+                } else if (target_page == 4) { 
+                  id(trmnl_display).show_page(id(ota_page)); 
+                  ESP_LOGD("display", "Обновление экрана: ota_page");
                 }
             - delay: 16ms
             - component.update: trmnl_display
             - delay: $deep_sleep_delay
-            - deep_sleep.enter:
-                sleep_duration: !lambda 'return id(sleep_time) * 1000;'
+            - if:
+                condition:
+                  lambda: 'return !id(ota_mod);' # Не засыпать, если OTA активен
+                then:
+                  - deep_sleep.enter:
+                      sleep_duration: !lambda 'return id(sleep_time) * 1000;'
 
           else:
             - logger.log: "Экран уже отображает эту страницу, перерисовка пропущена."
@@ -339,22 +378,27 @@ display:
     - id: failed
       lambda: |-
         // Выводим текст ровно по центру дисплея по обеим осям
-        it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font), COLOR_ON, TextAlign::TOP_CENTER, "Error");
+        it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font), COLOR_ON, TextAlign::CENTER, "Error");
 
     - id: pause_page
       lambda: |-
-        it.image(it.get_width() / 2, it.get_height() / 3, id(pause_image), ImageAlign::TOP_CENTER, COLOR_OFF, COLOR_ON);
+        // it.image(it.get_width() / 2, it.get_height() / 3, id(pause_image), ImageAlign::CENTER, COLOR_OFF, COLOR_ON);
+        it.fill(COLOR_OFF);
+    - id: ota_page
+      lambda: |-
+        it.fill(COLOR_OFF);
+        it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font), COLOR_ON, TextAlign::CENTER, "OTA MODE");
 
 font:
   - file: "https://github.com/IdreesInc/Monocraft/releases/download/v3.0/Monocraft.ttf"
     id: pixel_font
     size: 64 
-    glyphs: "Ero"
+    glyphs: "EroOTAMD "
 
-image:
-  - file: "https://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/smail-dithered.png"
-    id: pause_image
-    type: BINARY
+# image:
+#   - file: "https://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/smail-dithered.png"
+#     id: pause_image
+#     type: BINARY
 
 button:
   - platform: factory_reset
@@ -391,7 +435,7 @@ binary_sensor:
           - OFF for at least 0.5s
         then:
           - button.press: restart_button
-    
+
 sensor:
   - platform: adc
     name: "Напряжение батареи"
@@ -405,10 +449,10 @@ sensor:
     filters:
       - multiply: 2
       - round: 2
-      # - calibrate_linear:
-      #     - 0.0 -> 0.0
-      #     - 3.70 -> 4.143
-      #     - 3.86 -> 4.157
+      - calibrate_linear:
+           - 3.22 -> 3.75
+           - 3.64 -> 4.19
+           - 3.89 -> 4.20
     on_value:
       - text_sensor.template.publish:
           id: battery_voltage_text
@@ -466,6 +510,9 @@ text_sensor:
   - platform: template
     id: rssi_text
     update_interval: never
+  - platform: mqtt_subscribe
+    id: screen_design_id_override
+    topic: trmnl/config/screen_design_id_override
 
 switch:
   - platform: template
@@ -475,4 +522,3 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     icon: "mdi:monitor-off"
     entity_category: config
-
