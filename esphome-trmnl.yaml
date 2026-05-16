@@ -512,7 +512,7 @@ text_sensor:
     update_interval: never
   - platform: mqtt_subscribe
     id: screen_design_id_override
-    topic: trmnl/config/screen_design_id_override
+    topic: ${name}/config/screen_design_id_override
 
 switch:
   - platform: template
