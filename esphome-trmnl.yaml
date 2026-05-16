@@ -1,3 +1,7 @@
+# 1. Удержание кнопки при включении/пробуждении устройства сбрасывает принудительно установленый экран
+# 2. Короткое нажатие пробуждает/перезагружает устройство
+# 3. Длинное нажатие (более 3 секунд) включает режим прошивки по воздуху (OTA MODE)
+
 substitutions:
   fw_version: "1.1.2 esphome-trmnl"
   server_url: "http://192.168.1.100:80" # url inker
@@ -35,7 +39,6 @@ substitutions:
   busy_pin: GPIO25 #Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
   reset_pin: GPIO26   
 
-
 globals:
   - id: device_id
     type: std::string
@@ -54,8 +57,12 @@ globals:
   - id: current_page_id
     type: uint8_t
     restore_value: true
-    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page
+    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page 4: ota_page 
   - id: ota_mod
+    type: bool
+    initial_value: "false"
+  # флаг для очистки screen_design_id_override
+  - id: clear_override_flag
     type: bool
     initial_value: "false"
 
@@ -78,21 +85,16 @@ esphome:
           condition:
             lambda: 'return id(back_button).state;' 
           then:
-            - logger.log: "Кнопка зажата при старте! Вход в режим OTA."
-            - lambda: 'id(ota_mod) = true;'
-            - script.execute:
-                id: safe_update_display
-                target_page: 4 # Страница OTA MODE
-                force_update: false
-          else:
-            # Обычный запуск
-            - delay: $wifi_connect_delay
-            - if:
-                condition:
-                  not:
-                    wifi.connected:
-                then:
-                  - script.execute: trmnl_error
+            - logger.log: "Кнопка зажата при старте! Взведен флаг очистки Screen Design ID Override."
+            - lambda: 'id(clear_override_flag) = true;'
+      # Продолжаем обычный запуск
+      - delay: $wifi_connect_delay
+      - if:
+          condition:
+            not:
+              wifi.connected:
+          then:
+            - script.execute: trmnl_error
 
   project:
     name: "kfattum.esphome-trmnl"
@@ -409,9 +411,7 @@ button:
     name: "Перезагрузка"
     id: restart_button
 
-
 binary_sensor:
-
   - platform: gpio
     name: Button
     id: back_button
@@ -423,15 +423,23 @@ binary_sensor:
       allow_other_uses: true  
       inverted: true
     internal: True
+    filters:
+      - delayed_on_off: 20ms
     on_multi_click:
+      # 1. Удержание кнопки более 2 секунд — Запуск OTA-режима
       - timing:
-          - ON for at least 3s
-          - OFF for at least 0.5s
+          - ON for at least 2s
         then:
-          - button.press: factory_reset_button
+          - logger.log: "Удержание кнопки! Вход в режим OTA."
+          - lambda: 'id(ota_mod) = true;'
+          - script.execute:
+              id: safe_update_display
+              target_page: 4 # Страница OTA MODE
+              force_update: true
 
+      # 2. Короткое нажатие (опционально) — Перезагрузка
       - timing:
-          - ON for at least 0.3s
+          - ON for at most 1s
           - OFF for at least 0.5s
         then:
           - button.press: restart_button
@@ -513,6 +521,22 @@ text_sensor:
   - platform: mqtt_subscribe
     id: screen_design_id_override
     topic: ${name}/config/screen_design_id_override
+    on_value:
+      - if:
+          # Проверяем, был ли взведен флаг при загрузке, и не пустое ли пришло значение
+          condition:
+            lambda: 'return id(clear_override_flag) && x != "";'
+          then:
+            - logger.log: "Выполняется сброс Screen Design ID Override (кнопка была зажата при старте)..."
+            # Отправляем пустое значение в MQTT
+            - mqtt.publish:
+                topic: ${name}/config/screen_design_id_override
+                payload: ""
+                retain: true
+            # Очищаем локальный сенсор
+            - lambda: 'id(screen_design_id_override).publish_state("");'
+            # Снимаем флаг
+            - lambda: 'id(clear_override_flag) = false;'
 
 switch:
   - platform: template
