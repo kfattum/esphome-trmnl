@@ -7,9 +7,9 @@ substitutions:
   HA_url: "http://homeassistant.local:5083" # URL сервера Home Assistant
   Inker_url: "http://homeassistant.local:80" # URL сервера Inker
 
-  wifi_ap_password: !secret wifi_ap_password
-  web_username: !secret web_username
-  web_password: !secret web_password
+  wifi_ap_password: "esphome-trmnl"
+  web_username: "esphome-trmnl"
+  web_password: "esphome-trmnl"
 
   # manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
   # manual_ip_gateway: "192.168.1.1" # Шлюз локальной сети
@@ -104,7 +104,7 @@ esphome:
   min_version: 2026.1.3 
   name: $name
   friendly_name: $friendly_name
-  # name_add_mac_suffix: true
+  name_add_mac_suffix: true
   on_boot:
     priority: -10
     then:
@@ -128,8 +128,8 @@ esphome:
     name: "kfattum.esphome-trmnl"
     version: "$fw_version"
     
-# dashboard_import:
-#   package_import_url: github://kfattum/esphome-trmnl/esphome-trmnl.yaml@main
+dashboard_import:
+  package_import_url: github://kfattum/esphome-trmnl/esphome-trmnl.yaml@main
 
 logger:
   on_message:
@@ -145,7 +145,6 @@ logger:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
   - platform: web_server
 
 web_server:
@@ -160,15 +159,13 @@ captive_portal:
 improv_serial:
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
   min_auth_mode: WPA2
   power_save_mode: LIGHT
   fast_connect: true 
   output_power: $wifi_output_power
   ap:
     ap_timeout: 15s
-    password: !secret wifi_ap_password
+    password: $wifi_ap_password
   on_connect:
     then:
       - if:
