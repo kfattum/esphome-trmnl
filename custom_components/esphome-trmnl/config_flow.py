@@ -1,7 +1,7 @@
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 
-DOMAIN = "trmnl_eink"
+DOMAIN = "esphome_trmnl"
 
 class TrmnlConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1

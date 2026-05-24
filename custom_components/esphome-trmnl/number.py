@@ -17,7 +17,7 @@ class TrmnlSleepTimeNumber(NumberEntity):
         self._attr_name = f"TRMNL Sleep Time ({mac_id})"
         self._attr_unique_id = f"{mac_id}_sleep_time"
         self._attr_native_min_value = 0
-        # self._attr_native_max_value = 86400
+        self._attr_native_max_value = 9999999
         self._attr_native_step = 60
         self._attr_native_unit_of_measurement = "s"
         self._attr_icon = "mdi:timer-outline"

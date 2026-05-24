@@ -36,7 +36,7 @@ class TrmnlSensor(SensorEntity):
         return {
             "identifiers": {(DOMAIN, self._mac_id)},
             "name": f"ESPHome-TRMNL Display {self._mac_id}",
-            "connections": {(CONNECTION_NETWORK_MAC, self._mac_id)},
+            "connections": {("mac", self._mac_id)}
         }
 
     async def async_added_to_hass(self):

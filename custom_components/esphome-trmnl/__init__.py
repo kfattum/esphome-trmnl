@@ -7,7 +7,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 _LOGGER = logging.getLogger(__name__)
 
-DOMAIN = "trmnl_eink"
+DOMAIN = "esphome_trmnl"
 PLATFORMS = ["sensor", "text", "switch", "number"]
 
 SIGNAL_NEW_DEVICE = f"{DOMAIN}_new_device"
