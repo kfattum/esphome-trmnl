@@ -1,3 +1,4 @@
+import datetime
 import logging
 from aiohttp import web
 from homeassistant.core import HomeAssistant
@@ -58,11 +59,13 @@ class TrmnlConfigView(HomeAssistantView):
                 "sensors": sensors_data,
                 "override_screen_id": "",
                 "override_block_update": False,
-                "override_sleep_time": 3600
+                "override_sleep_time": 0,
+                "last_update": datetime.datetime.now(datetime.timezone.utc),
             }
             async_dispatcher_send(self.hass, SIGNAL_NEW_DEVICE, mac_id)
         else:
             devices[mac_id]["sensors"] = sensors_data
+            devices[mac_id]["last_update"] = datetime.datetime.now(datetime.timezone.utc)
             async_dispatcher_send(self.hass, SIGNAL_UPDATE_DEVICE, mac_id)
 
         device_data = devices[mac_id]

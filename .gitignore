@@ -5,3 +5,9 @@
 *.pyc
 *.pyo
 *.pyd
+
+secrets.yaml
+secrets.yml
+**/secrets.yaml
+
+**/.esphome/

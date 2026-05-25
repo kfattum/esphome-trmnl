@@ -14,7 +14,7 @@ class TrmnlOverrideText(TextEntity):
     def __init__(self, hass, mac_id):
         self.hass = hass
         self._mac_id = mac_id
-        self._attr_name = f"TRMNL Override URL ({mac_id})"
+        self._attr_name = "Override URL"
         self._attr_unique_id = f"{mac_id}_override_screen_id"
 
     @property

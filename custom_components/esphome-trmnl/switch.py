@@ -14,7 +14,7 @@ class TrmnlBlockUpdateSwitch(SwitchEntity):
     def __init__(self, hass, mac_id):
         self.hass = hass
         self._mac_id = mac_id
-        self._attr_name = f"TRMNL Block Update ({mac_id})"
+        self._attr_name = "Block Update"
         self._attr_unique_id = f"{mac_id}_block_update"
         self._attr_icon = "mdi:cancel"
 

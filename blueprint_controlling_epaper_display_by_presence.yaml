@@ -1,7 +1,9 @@
 blueprint:
   name: Управление e-ink дисплеем по присутствию
   description: >
-    При появлении дисплея в сети останавливает обновление дисплея (включает переключатель), когда никого нет дома или в комнате и возобновляет обновление (выключает переключатель), когда кто-то дома/в комнате.
+    Останавливает обновление дисплея, когда никого нет дома/в комнате, 
+    и возобновляет обновление, когда кто-то входит. Игнорирует перемещения 
+    между другими комнатами, не касающимися комнаты с дисплеем.
   domain: automation
   input:
     display_switch:
@@ -30,12 +32,19 @@ blueprint:
         boolean:
     room_sensors:
       name: Сенсоры комнат (Bermuda)
-      description: Выберите сенсоры браслетов/телефонов (например, sensor.mi_smart_band_4_area). Blueprint будет проверять атрибут 'area_id'.
+      description: Выберите сенсоры браслетов/телефонов. Blueprint проверяет атрибут 'area_id'.
       default: []
       selector:
         entity:
           multiple: true
           domain: sensor
+
+# Передаем входящие параметры (inputs) в триггеры, чтобы они могли их читать до старта экшенов
+trigger_variables:
+  t_persons: !input persons
+  t_sensors: !input room_sensors
+  t_area: !input display_area
+  t_tracking: !input use_room_tracking
 
 variables:
   persons_var: !input persons
@@ -43,15 +52,12 @@ variables:
   display_area_var: !input display_area
   use_room_tracking_var: !input use_room_tracking
 
-  # Проверяем, есть ли хоть кто-то дома
   is_anyone_home: >
     {{ expand(persons_var) | selectattr('state', 'in', ['home', 'on']) | list | count > 0 }}
 
-  # Проверяем, совпадает ли атрибут area_id у сенсоров с выбранной комнатой экрана
   is_anyone_in_room: >
-    {{ expand(room_sensors_var) | selectattr('attributes.area_id', 'eq', display_area_var) | list | count > 0 }}
+    {{ expand(room_sensors_var) | selectattr('attributes.area_id', 'defined') | selectattr('attributes.area_id', 'eq', display_area_var) | list | count > 0 }}
 
-  # Итоговая логика: должен ли экран обновляться?
   should_update: >
     {% if not is_anyone_home %}
       false
@@ -62,14 +68,22 @@ variables:
     {% endif %}
 
 trigger:
-  # Триггеры на изменение статуса людей (пришел/ушел)
-  #- platform: state
-  #  entity_id: !input persons
-  
-  # Триггеры на изменение статуса сенсоров комнат (перешел в другую комнату)
-  #- platform: state
-  #  entity_id: !input room_sensors
-  
+  # Триггер 1: Срабатывает ТОЛЬКО когда условие меняется на "Надо включить экран"
+  # (Кто-то пришел домой И (отслеживание комнат выключено ИЛИ кто-то вошел в целевую комнату))
+  - platform: template
+    value_template: >
+      {% set home = expand(t_persons) | selectattr('state', 'in', ['home', 'on']) | list | count > 0 %}
+      {% set in_room = expand(t_sensors) | selectattr('attributes.area_id', 'defined') | selectattr('attributes.area_id', 'eq', t_area) | list | count > 0 %}
+      {{ home and (not t_tracking or in_room) }}
+
+  # Триггер 2: Срабатывает ТОЛЬКО когда условие меняется на "Надо выключить экран"
+  # (Все ушли из дома ИЛИ (отслеживание комнат включено И все вышли из целевой комнаты))
+  - platform: template
+    value_template: >
+      {% set home = expand(t_persons) | selectattr('state', 'in', ['home', 'on']) | list | count > 0 %}
+      {% set in_room = expand(t_sensors) | selectattr('attributes.area_id', 'defined') | selectattr('attributes.area_id', 'eq', t_area) | list | count > 0 %}
+      {{ not home or (t_tracking and not in_room) }}
+      
   # Триггер на появление самого переключателя дисплея в сети
   - platform: state
     entity_id: !input display_switch
@@ -80,16 +94,16 @@ trigger:
       - "on"
       - "off"
       
-  # Дополнительный триггер при запуске Home Assistant
-  #- platform: homeassistant
-  #  event: start
+  # Триггер при запуске Home Assistant
+  - platform: homeassistant
+    event: start
 
 action:
   - choose:
       # Условие 1: Экран должен обновляться (Выключаем свитч сна/блокировки)
       - conditions:
           - condition: template
-            value_template: "{{ should_update == 'true' }}"
+            value_template: "{{ should_update == 'true' or should_update == true }}"
         sequence:
           - action: switch.turn_off
             target:
@@ -98,7 +112,7 @@ action:
       # Условие 2: Экран не должен обновляться (Включаем свитч сна/блокировки)
       - conditions:
           - condition: template
-            value_template: "{{ should_update == 'false' }}"
+            value_template: "{{ should_update == 'false' or should_update == false }}"
         sequence:
           - action: switch.turn_on
             target:
