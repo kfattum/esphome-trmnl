@@ -14,7 +14,8 @@ class TrmnlSleepTimeNumber(NumberEntity):
     def __init__(self, hass, mac_id):
         self.hass = hass
         self._mac_id = mac_id
-        self._attr_name = "Sleep Time"
+        self._attr_has_entity_name = True
+        self._attr_translation_key = "sleep_time"
         self._attr_unique_id = f"{mac_id}_sleep_time"
         self._attr_native_min_value = 0
         self._attr_native_max_value = 9999999

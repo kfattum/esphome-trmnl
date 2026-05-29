@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "TRMNL E-Ink Integration"
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one instance of ESPHome-TRMNL is allowed."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_v": {
+        "name": "Battery Voltage"
+      },
+      "battery_prc": {
+        "name": "Battery"
+      },
+      "wifi_prc": {
+        "name": "Wi-Fi Signal"
+      },
+      "last_update": {
+        "name": "Last Update"
+      }
+    },
+    "switch": {
+      "block_update": {
+        "name": "Block display refresh"
+      }
+    },
+    "number": {
+      "sleep_time": {
+        "name": "Sleep Time",
+        "state": {
+          "unit_of_measurement": "s"
+        }
+      }
+    },
+    "text": {
+      "override_screen_id": {
+        "name": "Image URL"
+      }
+    }
+  },
+  "device": {
+    "name": "ESPHome-TRMNL Display"
+  }
+}

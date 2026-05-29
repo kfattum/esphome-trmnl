@@ -1,0 +1,49 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "TRMNL — E-Ink интеграция"
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Допускается только один экземпляр ESPHome-TRMNL."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_v": {
+        "name": "Напряжение батареи"
+      },
+      "battery_prc": {
+        "name": "Уровень заряда батареи"
+      },
+      "wifi_prc": {
+        "name": "Сигнал Wi-Fi"
+      },
+      "last_update": {
+        "name": "Последнее обновление"
+      }
+    },
+    "switch": {
+      "block_update": {
+        "name": "Блокировать обновление дисплея"
+      }
+    },
+    "number": {
+      "sleep_time": {
+        "name": "Время сна",
+        "state": {
+          "unit_of_measurement": "с"
+        }
+      }
+    },
+    "text": {
+      "override_screen_id": {
+        "name": "URL изображения"
+      }
+    }
+  },
+  "device": {
+    "name": "ESPHome-TRMNL дисплей"
+  }
+}

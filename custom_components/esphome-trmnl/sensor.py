@@ -26,7 +26,8 @@ class TrmnlSensor(SensorEntity):
         self._mac_id = mac_id
         self._sensor_key = sensor_key
         self._precision = precision
-        self._attr_name = name
+        self._attr_has_entity_name = True
+        self._attr_translation_key = sensor_key
         self._attr_unique_id = f"{mac_id}_{sensor_key}"
         self._attr_native_unit_of_measurement = unit
         self._attr_device_class = device_class
@@ -64,7 +65,8 @@ class TrmnlLastUpdateSensor(SensorEntity):
     def __init__(self, hass, mac_id):
         self.hass = hass
         self._mac_id = mac_id
-        self._attr_name = "Last Update"
+        self._attr_has_entity_name = True
+        self._attr_translation_key = "last_update"
         self._attr_unique_id = f"{mac_id}_last_update"
         self._attr_device_class = SensorDeviceClass.TIMESTAMP
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
