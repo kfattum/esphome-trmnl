@@ -92,6 +92,8 @@ class TrmnlConfigClearView(HomeAssistantView):
         if mac_id and mac_id in self.hass.data[DOMAIN]["devices"]:
             _LOGGER.info(f"Clearing overrides for device: {mac_id}")
             self.hass.data[DOMAIN]["devices"][mac_id]["override_screen_id"] = ""
+            self.hass.data[DOMAIN]["devices"][mac_id]["override_sleep_time"] = 0
+            self.hass.data[DOMAIN]["devices"][mac_id]["override_block_update"] = False
             async_dispatcher_send(self.hass, SIGNAL_UPDATE_DEVICE, mac_id)
             return web.json_response({"status": "cleared"})
 

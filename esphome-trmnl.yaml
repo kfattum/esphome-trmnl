@@ -1,9 +1,9 @@
-# 1. Удержание кнопки при включении/пробуждении устройства сбрасывает принудительно установленый экран
+# 1. Удержание кнопки в режиме глубокого сна сбрасывает принудительно установленый экран, интервал обновления и блокировку обновления дисплея в интеграции Home Assistant
 # 2. Короткое нажатие пробуждает/перезагружает устройство
-# 3. Длинное нажатие (более 2 секунд) включает режим прошивки по воздуху (OTA MODE)
+# 3. Длинное нажатие (более 2 секунд) в активном режиме включает режим настройки в котором если плата подключена к wifi то отобразится qr-код со ссылкой на web-интерфейс, а если не подключена то qr-код со ссылкой на captive portal. В этом режиме устройство не засыпает 30 минут, а затем переходит в глубокий сон. 
 
 substitutions:
-  fw_version: "2.0.0 esphome-trmnl-http"
+  fw_version: "2.0.1 esphome-trmnl-http"
   HA_url: "http://homeassistant.local:5083" # URL сервера Home Assistant
   Inker_url: "http://homeassistant.local:80" # URL сервера Inker
 
@@ -56,7 +56,7 @@ globals:
     initial_value: '""'
   - id: sleep_time
     type: uint32_t
-    restore_value: true
+    # restore_value: true
     initial_value: "$sleep_time"
   - id: current_page_id
     type: uint8_t
@@ -139,6 +139,7 @@ logger:
             condition:
               lambda: 'return !id(ota_mod);'
             then:
+              - delay: 30s
               - script.execute: trmnl_error
             else:
               - logger.log: "Ошибка произошла в OTA режиме, сон отменен."
@@ -215,11 +216,13 @@ online_image:
     resize: 800x480
     on_download_finished:
       - delay: 16ms
+      - wifi.disable:
       - script.execute:
           id: safe_update_display
           target_page: 1
           force_update: true 
     on_error:
+        - wifi.disable:
         - script.execute: trmnl_error
 
 script:
@@ -236,11 +239,7 @@ script:
                 url: !lambda 'return (id(ha_url_dynamic) + "/api/config/clear").c_str();'
                 request_headers:
                   ID: !lambda 'return id(mac_address_sensor).state.c_str();'
-            - lambda: |-
-                id(override_screen_id) = "";
-                id(clear_override_flag) = false;
-                global_preferences->sync();
-
+            - delay: 100 ms
       - logger.log: "Запрос конфигурации HTTP..."
       - http_request.get:
           url: !lambda 'return (id(ha_url_dynamic) + "/api/config/").c_str();'
@@ -249,36 +248,35 @@ script:
             Battery-Voltage: !lambda 'return id(battery_voltage_text).state.c_str();'
             Battery-Voltage-prc: !lambda 'return id(battery_voltage_prc_text).state.c_str();'
             Wi-Fi-Signal-dB-prc: !lambda 'return id(wifi_signal_db_prc_text).state.c_str();'
-          capture_response: true
+          capture_response: true 
           on_response:
             - if:
                 condition:
                   lambda: return response->status_code >= 200 && response->status_code < 300;
                 then:
+                  - logger.log:
+                      format: "HTTP Config Response: %s"
+                      args: [body.c_str()]
                   - lambda: |-
                       json::parse_json(body, [](JsonObject root) -> bool {
                         if (root.containsKey("screen_design_id_override")) {
                           id(override_screen_id) = root["screen_design_id_override"].as<std::string>();
                         }
-                        if (root.containsKey("server_url")) {
-                          std::string new_url = root["server_url"].as<std::string>();
-                          if (!new_url.empty() && new_url != id(inker_url_dynamic)) {
-                            id(inker_url_dynamic) = new_url;
-                          }
-                        }
+
                         if (root.containsKey("block_update")) {
                           id(override_block_update) = root["block_update"].as<std::string>();
                         }
                         if (root.containsKey("sleep_time")) {
                           id(override_sleep_time) = root["sleep_time"].as<std::string>();
                         }
-                        global_preferences->sync();
+
                         return true;
                       });
-                  - logger.log: "Конфигурация HTTP успешно обновлена."
+
                 else:
-                  - logger.log: "Ответ сервера при запросе конфига не 2xx."
-            # Запускаем роутер в любом случае (успех или ошибка, чтобы дисплей продолжил работу)
+                  - logger.log:
+                      format: "HTTP Config Failed. HTTP Status: %d"
+                      args: [response->status_code]
             - script.execute: trmnl_router
           on_error:
             - logger.log: "Ошибка HTTP при получении конфига. "
@@ -334,9 +332,19 @@ script:
     then:
       - if:
           condition:
-            lambda: 'return id(override_block_update) == "ON" || id(override_block_update) == "true" || id(override_block_update) == "1";'
+            lambda: 'return id(override_block_update) == "true";'
           then:
             - logger.log: "Обновление дисплея заблокировано сервером"
+            - lambda: |-
+                // Чтение и проверка override_sleep_time при блокировке
+                std::string http_sleep_str = id(override_sleep_time);
+                if (!http_sleep_str.empty()) {
+                  uint32_t new_sleep = strtoul(http_sleep_str.c_str(), nullptr, 10);
+                  if (new_sleep > 59 && id(sleep_time) != new_sleep) {
+                    id(sleep_time) = new_sleep;
+                    ESP_LOGD("update", "Обновлен sleep_time из override_sleep_time: %u", id(sleep_time));
+                  }
+                }
             - delay: 16ms
             - script.execute:
                 id: safe_update_display
@@ -389,14 +397,14 @@ script:
                                   
                                   if (http_sleep > 59) {
                                     id(sleep_time) = http_sleep;
-                                    ESP_LOGD("update", "Используется sleep_time из HTTP Config: %u", id(sleep_time));
+                                    ESP_LOGD("update", "Используется sleep_time из HA (HTTP Config): %u", id(sleep_time));
                                   } else {
                                     id(sleep_time) = root["refresh_rate"].as<uint32_t>();
-                                    ESP_LOGW("update", "HTTP Config sleep_time некорректен, используем данные сервера: %u", id(sleep_time));
+                                    ESP_LOGW("update", "HTTP Config sleep_time некорректен, используем данные inker: %u", id(sleep_time));
                                   }
                                 } else {
                                   id(sleep_time) = root["refresh_rate"].as<uint32_t>();
-                                  ESP_LOGD("update", "HTTP Config пустое, используется sleep_time от сервера: %u", id(sleep_time));
+                                  ESP_LOGD("update", "HTTP Config пустое, используется sleep_time от inker: %u", id(sleep_time));
                                 }
                               }
                               return true;

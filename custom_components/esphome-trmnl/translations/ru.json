@@ -31,7 +31,7 @@
     },
     "number": {
       "sleep_time": {
-        "name": "Время сна",
+        "name": "Интервал обновления",
         "state": {
           "unit_of_measurement": "с"
         }
