@@ -12,13 +12,11 @@ A repository for an ESPHome-based e-ink display project designed to display data
 ``` mermaid
 flowchart LR
     HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
-    RSS["RSS Feeds"] --> Inker
-    Inker -- PNG --> ESPH["ESPHome <br> E-Ink Display"]
-    HA <--> MQTT_Int["MQTT <br> Integration"]
+    Inker <-- HTTP requests --> ESPH["ESPHome <br> E-Ink Display"]
+    HA <--> Int["Custom Integration"]
     HA --> BP["blueprint"]
-    BP --> MQTT_Int
-    MQTT_Int <--> Mosq["Mosquitto <br> broker"]
-    Mosq <-- MQTT --> ESPH
+    BP --> Int
+    Int <-- HTTP requests --> ESPH
 ```
 
  

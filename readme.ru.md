@@ -12,13 +12,11 @@
 ``` mermaid
 flowchart LR
     HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
-    RSS["RSS-каналы"] --> Inker
-    Inker -- PNG --> ESPH["ESPHome <br> E-Ink дисплей"]
-    HA <--> MQTT_Int["интеграция <br> MQTT"]
+    Inker <-- HTTP-запросы --> ESPH["ESPHome <br> E-Ink дисплей"]
+    HA <--> Int["Кастомная интеграция"]
     HA --> BP["blueprint"]
-    BP --> MQTT_Int
-    MQTT_Int <--> Mosq["Mosquitto <br> broker"]
-    Mosq <-- MQTT --> ESPH
+    BP --> Int
+    Int <-- HTTP-запросы --> ESPH
 ```
 
  
