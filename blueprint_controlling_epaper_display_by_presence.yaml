@@ -1,45 +1,59 @@
 blueprint:
-  name: Управление e-ink дисплеем по присутствию
+  name: Управление e-ink дисплеем по присутствию / Presence-based e-ink display control
   description: >
     Останавливает обновление дисплея, когда никого нет дома/в комнате, 
     и возобновляет обновление, когда кто-то входит. Игнорирует перемещения 
     между другими комнатами, не касающимися комнаты с дисплеем.
+    
+    Stops display updates when no one is home/in the room, 
+    and resumes updates when someone enters. Ignores movements 
+    between other rooms not related to the room with the display.
   domain: automation
   input:
     display_switch:
-      name: Переключатель обновления экрана
-      description: Объект switch, который при включении (ON) останавливает обновление экрана.
+      name: Переключатель обновления экрана / Screen update switch
+      description: >
+        Объект switch, который при включении (ON) останавливает обновление экрана.
+        A switch entity that, when turned ON, stops the screen from updating.
       selector:
         entity:
           domain: switch
     display_area:
-      name: Комната дисплея
-      description: Выберите зону (area), в которой физически установлен этот дисплей.
+      name: Комната дисплея / Display area
+      description: >
+        Выберите зону (area), в которой физически установлен этот дисплей.
+        Select the area where this display is physically installed.
       selector:
         area:
     persons:
-      name: Датчики присутствия дома
-      description: Объекты person или device_tracker. Если хотя бы один из них 'home', считается, что дома кто-то есть.
+      name: Датчики присутствия дома / Home presence sensors
+      description: >
+        Объекты person или device_tracker. Если хотя бы один из них 'home', считается, что дома кто-то есть.
+        Person or device_tracker entities. If at least one is 'home', the house is considered occupied.
       selector:
         entity:
           multiple: true
           domain: [person, device_tracker]
     use_room_tracking:
-      name: Использовать отслеживание по комнатам?
-      description: Если выключено, дисплей будет работать всегда, когда кто-то есть дома (игнорируя датчики комнат).
+      name: Использовать отслеживание по комнатам? / Use room tracking?
+      description: >
+        Если выключено, дисплей будет работать всегда, когда кто-то есть дома (игнорируя датчики комнат).
+        If disabled, the display will always update when someone is home (ignoring room sensors).
       default: true
       selector:
         boolean:
     room_sensors:
-      name: Сенсоры комнат (Bermuda)
-      description: Выберите сенсоры браслетов/телефонов. Blueprint проверяет атрибут 'area_id'.
+      name: Сенсоры комнат (Bermuda) / Room sensors (Bermuda)
+      description: >
+        Выберите сенсоры браслетов/телефонов. Blueprint проверяет атрибут 'area_id'.
+        Select wristband/phone sensors. The blueprint checks the 'area_id' attribute.
       default: []
       selector:
         entity:
           multiple: true
           domain: sensor
 
-# Передаем входящие параметры (inputs) в триггеры, чтобы они могли их читать до старта экшенов
+# Передаем входящие параметры (inputs) в триггеры, чтобы они могли их читать до старта экшенов / Passing inputs to triggers
 trigger_variables:
   t_persons: !input persons
   t_sensors: !input room_sensors
@@ -69,6 +83,7 @@ variables:
 
 trigger:
   # Триггер 1: Срабатывает ТОЛЬКО когда условие меняется на "Надо включить экран"
+  # Trigger 1: Fires ONLY when the condition changes to "Turn on screen"
   # (Кто-то пришел домой И (отслеживание комнат выключено ИЛИ кто-то вошел в целевую комнату))
   - platform: template
     value_template: >
@@ -77,6 +92,7 @@ trigger:
       {{ home and (not t_tracking or in_room) }}
 
   # Триггер 2: Срабатывает ТОЛЬКО когда условие меняется на "Надо выключить экран"
+  # Trigger 2: Fires ONLY when the condition changes to "Turn off screen"
   # (Все ушли из дома ИЛИ (отслеживание комнат включено И все вышли из целевой комнаты))
   - platform: template
     value_template: >
@@ -85,6 +101,7 @@ trigger:
       {{ not home or (t_tracking and not in_room) }}
       
   # Триггер на появление самого переключателя дисплея в сети
+  # Trigger when the display switch itself comes online
   - platform: state
     entity_id: !input display_switch
     from:
@@ -95,12 +112,14 @@ trigger:
       - "off"
       
   # Триггер при запуске Home Assistant
+  # Trigger on Home Assistant start
   - platform: homeassistant
     event: start
 
 action:
   - choose:
       # Условие 1: Экран должен обновляться (Выключаем свитч сна/блокировки)
+      # Condition 1: Screen should update (Turn OFF sleep/lock switch)
       - conditions:
           - condition: template
             value_template: "{{ should_update == 'true' or should_update == true }}"
@@ -110,6 +129,7 @@ action:
               entity_id: !input display_switch
               
       # Условие 2: Экран не должен обновляться (Включаем свитч сна/блокировки)
+      # Condition 2: Screen should NOT update (Turn ON sleep/lock switch)
       - conditions:
           - condition: template
             value_template: "{{ should_update == 'false' or should_update == false }}"
