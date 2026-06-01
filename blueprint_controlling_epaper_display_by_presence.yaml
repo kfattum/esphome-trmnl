@@ -14,6 +14,7 @@ blueprint:
       name: Переключатель обновления экрана / Screen update switch
       description: >
         Объект switch, который при включении (ON) останавливает обновление экрана.
+
         A switch entity that, when turned ON, stops the screen from updating.
       selector:
         entity:
@@ -22,6 +23,7 @@ blueprint:
       name: Комната дисплея / Display area
       description: >
         Выберите зону (area), в которой физически установлен этот дисплей.
+
         Select the area where this display is physically installed.
       selector:
         area:
@@ -29,6 +31,7 @@ blueprint:
       name: Датчики присутствия дома / Home presence sensors
       description: >
         Объекты person или device_tracker. Если хотя бы один из них 'home', считается, что дома кто-то есть.
+
         Person or device_tracker entities. If at least one is 'home', the house is considered occupied.
       selector:
         entity:
@@ -38,6 +41,7 @@ blueprint:
       name: Использовать отслеживание по комнатам? / Use room tracking?
       description: >
         Если выключено, дисплей будет работать всегда, когда кто-то есть дома (игнорируя датчики комнат).
+
         If disabled, the display will always update when someone is home (ignoring room sensors).
       default: true
       selector:
@@ -46,12 +50,38 @@ blueprint:
       name: Сенсоры комнат (Bermuda) / Room sensors (Bermuda)
       description: >
         Выберите сенсоры браслетов/телефонов. Blueprint проверяет атрибут 'area_id'.
+        
         Select wristband/phone sensors. The blueprint checks the 'area_id' attribute.
       default: []
       selector:
         entity:
           multiple: true
           domain: sensor
+    
+    # параметры для управления интервалом обновления
+    update_interval_entity:
+      name: Объект интервала обновления / Update interval entity (Optional)
+      description: >
+        (Опционально) Объект number для управления сном дисплея (например, number.esphome_trmnl_display_sleep_time).
+        
+        (Optional) The number entity to control the sleep interval.
+      default: ""
+      selector:
+        entity:
+          domain: number
+          multiple: false
+    empty_interval_value:
+      name: Значение интервала при отсутствии / Empty interval value
+      description: >
+        Число, которое будет установлено в объект интервала, когда никого нет.
+        
+        The value to set when no one is around.
+      default: 3600
+      selector:
+        number:
+          min: 0
+          max: 86400
+          mode: box
 
 # Передаем входящие параметры (inputs) в триггеры, чтобы они могли их читать до старта экшенов / Passing inputs to triggers
 trigger_variables:
@@ -65,6 +95,9 @@ variables:
   room_sensors_var: !input room_sensors
   display_area_var: !input display_area
   use_room_tracking_var: !input use_room_tracking
+  
+  update_interval_entity_var: !input update_interval_entity
+  empty_interval_value_var: !input empty_interval_value
 
   is_anyone_home: >
     {{ expand(persons_var) | selectattr('state', 'in', ['home', 'on']) | list | count > 0 }}
@@ -118,8 +151,7 @@ trigger:
 
 action:
   - choose:
-      # Условие 1: Экран должен обновляться (Выключаем свитч сна/блокировки)
-      # Condition 1: Screen should update (Turn OFF sleep/lock switch)
+      # Условие 1: Экран должен обновляться (Выключаем свитч сна/блокировки и восстанавливаем интервал)
       - conditions:
           - condition: template
             value_template: "{{ should_update == 'true' or should_update == true }}"
@@ -127,13 +159,40 @@ action:
           - action: switch.turn_off
             target:
               entity_id: !input display_switch
+          
+          # Если сущность интервала задана, восстанавливаем ее предыдущее состояние
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ update_interval_entity_var != none and update_interval_entity_var | length > 0 }}"
+                sequence:
+                  - action: scene.turn_on
+                    target:
+                      entity_id: "scene.eink_display_state_{{ display_area_var | default('default', true) | slugify }}"
+                    continue_on_error: true
               
-      # Условие 2: Экран не должен обновляться (Включаем свитч сна/блокировки)
-      # Condition 2: Screen should NOT update (Turn ON sleep/lock switch)
+      # Условие 2: Экран не должен обновляться (Включаем свитч сна/блокировки и меняем интервал)
       - conditions:
           - condition: template
             value_template: "{{ should_update == 'false' or should_update == false }}"
         sequence:
+          # Если сущность интервала задана, сохраняем текущее состояние и устанавливаем новое значение
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ update_interval_entity_var != none and update_interval_entity_var | length > 0 }}"
+                sequence:
+                  - action: scene.create
+                    data:
+                      scene_id: "eink_display_state_{{ display_area_var | default('default', true) | slugify }}"
+                      snapshot_entities:
+                        - "{{ update_interval_entity_var }}"
+                  - action: number.set_value
+                    target:
+                      entity_id: "{{ update_interval_entity_var }}"
+                    data:
+                      value: "{{ empty_interval_value_var }}"
+                      
           - action: switch.turn_on
             target:
               entity_id: !input display_switch
