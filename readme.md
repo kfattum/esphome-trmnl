@@ -8,7 +8,7 @@
 
 A repository for an ESPHome-based e-ink display project designed to display data from your [inker](https://github.com/usetrmnl/inker) ~~TRMNL BYOD~~ server and controlled by Home Assistant. The project was not created by the ESPHome or TRMNL team and is not affiliated with them.
 
-**Documentation:** [EN](https://3dpm.ru/en/open_projects/ESPHome-TRMNL_7+5/) | [RU](https://3dpm.ru/open_projects/ESPHome-TRMNL_7+5/)
+**Documentation:** [EN](https://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/) | [RU](https://kfattum.github.io/open_projects/ESPHome-TRMNL_7+5/)
 ``` mermaid
 flowchart LR
     HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
