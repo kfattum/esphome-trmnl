@@ -3,7 +3,7 @@
 # 3. Длинное нажатие (более 5 секунд) в активном режиме включает режим настройки в котором если плата подключена к wifi то отобразится qr-код со ссылкой на web-интерфейс, а если не подключена то qr-код со ссылкой на captive portal. В этом режиме устройство не засыпает 30 минут, а затем переходит в глубокий сон. 
 
 substitutions:
-  fw_version: "2.0.4 esphome-trmnl"
+  fw_version: "2.0.5 esphome-trmnl"
   HA_url: "http://homeassistant.local:8123" # URL сервера Home Assistant
   Inker_url: "http://homeassistant.local:8124" # URL сервера Inker
 
@@ -63,7 +63,7 @@ globals:
   - id: current_page_id
     type: uint8_t
     restore_value: true
-    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page 4: ota_page 
+    initial_value: "0" # 0: нет данных, 1: trmnl_page, 2: failed, 3: pause_page 4: ota_page 5: ap_page
   - id: ota_mod
     type: bool
     initial_value: "false"
@@ -120,14 +120,36 @@ esphome:
           then:
             - logger.log: "Кнопка зажата при старте! Взведен флаг очистки Screen Design ID Override."
             - lambda: 'id(clear_override_flag) = true;'
-      # Продолжаем обычный запуск
-      - delay: $wifi_connect_delay
+            
+# Проверка наличия сохраненных данных Wi-Fi
       - if:
           condition:
-            not:
-              wifi.connected:
+            lambda: 'return !wifi::global_wifi_component->has_sta();'
           then:
-            - script.execute: trmnl_error
+            - logger.log: "No saved Wi-Fi credentials! Entering AP setup mode."
+            - lambda: 'id(ota_mod) = true;'
+            - wait_until:
+                condition: wifi.ap_active
+                timeout: 15s
+            - script.execute: generate_qr_link_ap
+            - delay: 16ms
+            - script.execute:
+                id: safe_update_display
+                target_page: 5 # Переход на ap_page, так как нет подключения к сети
+                force_update: true
+
+      # Продолжаем обычный запуск, если режим OTA не активен
+      - if:
+          condition:
+            lambda: 'return !id(ota_mod);'
+          then:
+            - delay: $wifi_connect_delay
+            - if:
+                condition:
+                  not:
+                    wifi.connected:
+                then:
+                  - script.execute: trmnl_error
 
   project:
     name: "kfattum.esphome-trmnl"
@@ -601,11 +623,11 @@ font:
 
 button:
   - platform: factory_reset
-    name: "Сброс"
+    name: "Factory Reset"
     id: factory_reset_button
 
   - platform: restart
-    name: "Перезагрузка"
+    name: "Restart"
     id: restart_button
 
 binary_sensor:
@@ -629,7 +651,9 @@ binary_sensor:
         then:
           - logger.log: "Удержание кнопки! Вход в режим OTA."
           - lambda: 'id(ota_mod) = true;'
-          - delay: 20s
+          - wait_until:
+              condition: wifi.ap_active
+              timeout: 20s
           - if:
               condition: wifi.ap_active
               then:
@@ -650,8 +674,8 @@ binary_sensor:
 
 sensor:
   - platform: adc
-    name: "Напряжение батареи"
-    icon: "mdi:alpha-v-cirde"
+    name: "Battery Voltage"
+    icon: "mdi:alpha-v-circle"
     entity_category: "diagnostic"
     id: battery_voltage
     pin: $adc_pin
@@ -671,7 +695,7 @@ sensor:
 
   - platform: copy
     id: battery_voltage_prc
-    name: "Уровень заряда батареи"
+    name: "Battery Level"
     source_id: battery_voltage
     unit_of_measurement: "%"
     icon: "mdi:battery"
@@ -694,7 +718,7 @@ sensor:
           state: !lambda 'return str_sprintf("%.2f", x).c_str();'
 
   - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
-    name: "Сигнал Wi-Fi, dB"
+    name: "Wi-Fi Signal, dB"
     id: wifi_signal_db
     update_interval: never
     entity_category: "diagnostic"
@@ -707,7 +731,7 @@ sensor:
   - platform: copy # Reports the WiFi signal strength in %
     id: wifi_signal_db_prc
     source_id: wifi_signal_db
-    name: "Сигнал Wi-Fi"
+    name: "Wi-Fi Signal"
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "%"
@@ -741,7 +765,7 @@ text_sensor:
 
 text:
   - platform: template
-    name: URL сервера Inker
+    name: "Inker Server URL"
     mode: text
     optimistic: true
     on_value:
@@ -758,7 +782,7 @@ text:
                 args: [ 'id(inker_url_dynamic).c_str()' ]
 
   - platform: template
-    name: URL сервера Home Assistant
+    name: "Home Assistant Server URL"
     mode: text
     optimistic: true
     on_value:
@@ -776,7 +800,7 @@ text:
 
 select:
   - platform: template
-    name: "Язык"
+    name: "Language"
     id: sys_language
     entity_category: config
     optimistic: true
