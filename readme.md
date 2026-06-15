@@ -13,7 +13,9 @@ A repository for an ESPHome-based e-ink display project designed to display data
 ``` mermaid
 flowchart LR
     HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
-    Inker <-- HTTP requests --> ESPH["ESPHome <br> E-Ink Display"]
+    Inker <-- HTTP requests --> ESPH
+    Inker -- PNG --> ESPH
+    ["ESPHome <br> E-Ink Display"]
     HA <--> Int["Custom Integration"]
     HA --> BP["blueprint"]
     BP --> Int

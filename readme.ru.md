@@ -13,7 +13,9 @@
 ``` mermaid
 flowchart LR
     HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
-    Inker <-- HTTP-запросы --> ESPH["ESPHome <br> E-Ink дисплей"]
+    Inker <-- HTTP-запросы --> ESPH
+    Inker -- PNG --> ESPH
+    ["ESPHome <br> E-Ink дисплей"]
     HA <--> Int["Кастомная интеграция"]
     HA --> BP["blueprint"]
     BP --> Int
