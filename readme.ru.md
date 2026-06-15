@@ -8,19 +8,7 @@
 
 Репозиторий проекта E-ink дисплея на ESPHome, предназначенного для отображения данных с вашего сервера [inker](https://github.com/usetrmnl/inker) ~~TRMNL BYOD~~ и управляемый Home Assistant. Проект не создан командой ESPHome или ТRMNL и не аффилирован с ними.
 
-## **Документация:** [EN](https://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/) | [RU](https://kfattum.github.io/open_projects/ESPHome-TRMNL_7+5/)
-
-
-## Содержимое репозитория
-
-| Путь | Описание |
-|---|---|
-| `esphome-trmnl.yaml` | Основной конфиг прошивки ESPHome. Использует `!secret` — для ручной компиляции. |
-| `esphome-trmnl.factory.yaml` | Конфиг который используется [web installer](https://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/). |
-| `custom_components/esphome-trmnl/` | Кастомная интеграция для Home Assistant (`esphome_trmnl`). |
-| `blueprint_controlling_epaper_display_by_presence.yaml` | Blueprint-автоматизация: приостанавливает обновление экрана при отсутствии людей. |
-
-## Как компоненты связаны
+**Документация:** [EN](https://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/) | [RU](https://kfattum.github.io/open_projects/ESPHome-TRMNL_7+5/)
 
 ``` mermaid
 flowchart LR
@@ -31,9 +19,3 @@ flowchart LR
     BP --> Int
     Int <-- HTTP-запросы --> ESPH
 ```
-
-1. **ESP32 + e-paper** — работает на прошивке из `esphome-trmnl.yaml` (или factory-варианта).
-2. Устройство получает изображения экрана с вашего **Inker**-сервера по HTTP (`/api/display/`).
-3. При первой загрузке регистрируется в Inker (`/api/setup/`), затем периодически запрашивает новые изображения.
-4. **Кастомная интеграция** (`custom_components/esphome-trmnl/`) позволяет Home Assistant управлять дисплеем: переопределять URL изображения, изменять интервал и блокировать обновление экрана.
-5. **Blueprint** автоматизация которая отслеживает присутствие и блокирует обновления экрана когда вас нет рядом, чтобы экран не обновлялся попусту.
