@@ -1,4 +1,4 @@
-# 1. Длинное нажатие (более 5 секунд) в режиме глубокого сна сбрасывает принудительно установленый экран, интервал обновления и блокировку обновления дисплея в интеграции Home Assistant
+# 1. Длинное нажатие (более 5 секунд) в режиме глубокого сна сбрасывает принудительно установленный экран, интервал обновления и блокировку обновления дисплея в интеграции Home Assistant
 # 2. Короткое нажатие пробуждает/перезагружает устройство
 # 3. Длинное нажатие (более 5 секунд) в активном режиме включает режим настройки в котором если плата подключена к wifi то отобразится qr-код со ссылкой на web-интерфейс, а если не подключена то qr-код со ссылкой на captive portal. В этом режиме устройство не засыпает 30 минут, а затем переходит в глубокий сон. 
 
@@ -88,6 +88,9 @@ globals:
     type: std::string
     max_restore_data_length: 7
     initial_value: '""'
+  - id: last_error_msg
+    type: std::string
+    initial_value: '""'
 
 esp32:
   variant: ESP32
@@ -143,7 +146,9 @@ esphome:
                   not:
                     wifi.connected:
                 then:
-                  - script.execute: trmnl_error
+                  - script.execute:
+                      id: trmnl_error
+                      error_msg: "Wi-Fi timeout"
 
   project:
     name: "kfattum.esphome-trmnl"
@@ -158,9 +163,9 @@ logger:
               lambda: 'return !id(ota_mod);'
             then:
               - delay: 30s
-              - script.execute: trmnl_error
-            else:
-              - logger.log: "Ошибка произошла в OTA режиме, сон отменен."
+              - script.execute:
+                  id: trmnl_error
+                  error_msg: !lambda 'return std::string(message);'
 
 ota:
   - platform: esphome
@@ -205,7 +210,7 @@ wifi:
                       force_update: true
                   - delay: $deep_sleep_delay
                   - deep_sleep.enter:
-                      sleep_duration: 67 d
+                      sleep_duration: 49 d
                 else:
                   # Обычная загрузка, если заряд в норме или порог не задан
                   - script.execute: trmnl_config 
@@ -256,7 +261,9 @@ online_image:
           force_update: true 
     on_error:
         - delay: 16ms
-        - script.execute: trmnl_error
+        - script.execute:
+            id: trmnl_error
+            error_msg: "Image download failed"
 
 script:
   # 1. Скрипт получения конфигурации по HTTP
@@ -273,7 +280,7 @@ script:
                 request_headers:
                   ID: !lambda 'return id(mac_address_sensor).state.c_str();'
             - delay: 100 ms
-      - logger.log: "Запрос конфигурации HTTP..."
+      - logger.log: "Запрос конфигурации у Home Assistant"
       - http_request.get:
           url: !lambda 'return (id(ha_url_dynamic) + "/api/config/").c_str();'
           request_headers:
@@ -292,17 +299,15 @@ script:
                       args: [body.c_str()]
                   - lambda: |-
                       json::parse_json(body, [](JsonObject root) -> bool {
-                        if (root.containsKey("screen_design_id_override")) {
+                        if (root["screen_design_id_override"].is<std::string>()) {
                           id(override_screen_id) = root["screen_design_id_override"].as<std::string>();
                         }
-
-                        if (root.containsKey("block_update")) {
+                        if (root["block_update"].is<std::string>()) {
                           id(override_block_update) = root["block_update"].as<std::string>();
                         }
-                        if (root.containsKey("sleep_time")) {
+                        if (root["sleep_time"].is<std::string>()) {
                           id(override_sleep_time) = root["sleep_time"].as<std::string>();
                         }
-
                         return true;
                       });
 
@@ -356,10 +361,14 @@ script:
                   - logger.log:
                       format: "TRMNL Setup Failed. HTTP Status: %d"
                       args: [response->status_code]
-                  - script.execute: trmnl_error
+                  - script.execute:
+                      id: trmnl_error
+                      error_msg: !lambda 'return "Setup HTTP Status: " + std::to_string(response->status_code);'
           on_error:
             - logger.log: "TRMNL Setup Connection Error / Timeout"
-            - script.execute: trmnl_error
+            - script.execute:
+                id: trmnl_error
+                error_msg: "Error connecting to Inker / Timeout"
 
   - id: trmnl_update
     then:
@@ -448,13 +457,20 @@ script:
                         - logger.log:
                             format: "TRMNL Update Failed. HTTP Status: %d"
                             args: [response->status_code]
-                        - script.execute: trmnl_error
+                        - script.execute:
+                            id: trmnl_error
+                            error_msg: !lambda 'return "Update HTTP Status: " + std::to_string(response->status_code);'
                 on_error:
                   - logger.log: "TRMNL Update Connection Error / Timeout"
-                  - script.execute: trmnl_error
+                  - script.execute:
+                      id: trmnl_error
+                      error_msg: "Error connecting to Inker / Timeout"
 
   - id: trmnl_error
+    parameters:
+      error_msg: std::string
     then:
+      - lambda: 'id(last_error_msg) = error_msg;'
       - if:
           condition:
             lambda: 'return !id(ota_mod);'
@@ -563,12 +579,16 @@ display:
 
     - id: failed
       lambda: |-
-        // Выводим текст ровно по центру дисплея по обеим осям
-        if (id(sys_language).state == "EN") {
-          it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font), COLOR_ON, TextAlign::CENTER, "ERROR");
+        int center_x = it.get_width() / 2;
+        int center_y = it.get_height() / 2;
+        
+        if (id(sys_language).current_option() == "EN") {
+          it.printf(center_x, center_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "ERROR");
         } else {
-          it.printf(it.get_width() / 2, it.get_height() / 2, id(pixel_font), COLOR_ON, TextAlign::CENTER, "ОШИБКА");
+          it.printf(center_x, center_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "ОШИБКА");
         }
+
+        it.printf(center_x, center_y + 60, id(pixel_font_20), COLOR_ON, TextAlign::CENTER, "%s", id(last_error_msg).c_str());
 
     - id: pause_page
       lambda: |-
@@ -588,7 +608,7 @@ display:
 
         it.qr_code(qr_x, qr_y, id(qr_web_server), COLOR_ON, 5);
 
-        if (id(sys_language).state == "EN") {
+        if (id(sys_language).current_option() == "EN") {
           it.printf(center_x, center_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "SETUP MODE");
           it.printf(center_x, text_20_y, id(pixel_font_20), COLOR_ON, TextAlign::CENTER, "Web server");
         } else {
@@ -608,7 +628,7 @@ display:
 
         it.qr_code(qr_x, qr_y, id(qr_ap), COLOR_ON, 5);
 
-        if (id(sys_language).state == "EN") {
+        if (id(sys_language).current_option() == "EN") {
           it.printf(center_x, center_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "SETUP MODE");
           it.printf(center_x, text_20_y, id(pixel_font_20), COLOR_ON, TextAlign::CENTER, "Scan QR code to connect to Wi-Fi");
         } else {
@@ -635,7 +655,7 @@ display:
         int text_20_y = img_y + (img_h / 2); 
 
         // Вывод главного текста 
-        if (id(sys_language).state == "EN") {
+        if (id(sys_language).current_option() == "EN") {
           it.printf(center_x, text_main_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "LOW BATTERY");
         } else {
           it.printf(center_x, text_main_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "БАТАРЕЯ РАЗРЯЖЕНА");
@@ -656,7 +676,7 @@ font:
   - file: "https://github.com/IdreesInc/Monocraft/releases/download/v3.0/Monocraft.ttf"
     id: pixel_font_20
     size: 20 
-    glyphs: "Web srvсервScanQRodti-FОтканиуйодплючwf1234567890V."
+    glyphs: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя0123456789 /-.:,;!?"
 
 image:
 #   - file: "https://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/smail-dithered.png"
