@@ -4,8 +4,8 @@
   "codeowners": ["@kfattum"],
   "config_flow": true,
   "dependencies": ["http"],
-  "documentation": "https://github.com/kfattum/esphome-trmnl",
+  "documentation": "http://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/readme_custom_components_esphome-trmnl/",
   "issue_tracker": "https://github.com/kfattum/esphome-trmnl/issues",
   "iot_class": "local_push",
-  "version": "2.0.0"
+  "version": "2.0.1"
 }

@@ -3,17 +3,13 @@
 # 3. Длинное нажатие (более 5 секунд) в активном режиме включает режим настройки в котором если плата подключена к wifi то отобразится qr-код со ссылкой на web-интерфейс, а если не подключена то qr-код со ссылкой на captive portal. В этом режиме устройство не засыпает 30 минут, а затем переходит в глубокий сон. 
 
 substitutions:
-  fw_version: "2.0.5 esphome-trmnl-factory"
+  fw_version: "2.1.0 esphome-trmnl-factory"
   HA_url: "http://homeassistant.local:8123" # URL сервера Home Assistant
   Inker_url: "http://homeassistant.local:8124" # URL сервера Inker
 
   wifi_ap_password: "esphome-trmnl"
   web_username: "esphome-trmnl"
   web_password: "esphome-trmnl"
-
-  # manual_ip_static_ip: "192.168.1.222" # Статический IP-адрес дисплея
-  # manual_ip_gateway: "192.168.1.1" # Шлюз локальной сети
-  # manual_ip_subnet: "255.255.255.0" # Подсеть локальной сети
 
   name: "trmnl" # Это имя дисплея. Может содержать только строчные буквы, цифры и дефисы и по умолчанию может иметь длину не более 24
   friendly_name: "TRMNL" # Это имя отображается в интерфейсе Home Assistant
@@ -29,6 +25,7 @@ substitutions:
   error_sleep_duration: "1200" # (сек.) Время сна экрана при возникновении ошибки
   reset_duration: 200ms # Длительность операции сброса дисплея
   wifi_connect_delay: 15s # Время на попытку подключения к wifi
+  low_battery_threshold: "0.0" # V, Пороговое значение напряжения аккумулятора для отображения предупреждения о низком заряде. 0.0 = проверка отключена
 
   # status_led: GPIO2
   button: GPIO32
@@ -194,7 +191,24 @@ wifi:
           condition:
             lambda: 'return !id(ota_mod);'
           then:
-            - script.execute: trmnl_config 
+            # ПРОВЕРКА ЗАРЯДА АККУМУЛЯТОРА
+            - if:
+                condition:
+                  and:
+                    - lambda: 'return id(low_battery_threshold).state > 0.0;' # Функция включена
+                    - lambda: 'return id(battery_voltage).state > 0.0 && id(battery_voltage).state <= id(low_battery_threshold).state;' # Напряжение ниже порога
+                then:
+                  - logger.log: "Напряжение аккумулятора ниже установленного порога! Вывод экрана оповещения."
+                  - script.execute:
+                      id: safe_update_display
+                      target_page: 6 # ID страницы battery_low_page
+                      force_update: true
+                  - delay: $deep_sleep_delay
+                  - deep_sleep.enter:
+                      sleep_duration: 67 d
+                else:
+                  # Обычная загрузка, если заряд в норме или порог не задан
+                  - script.execute: trmnl_config 
           else:
             - logger.log: "Wi-Fi подключен, активен OTA MODE"
             - delay: 16ms
@@ -484,6 +498,9 @@ script:
                 } else if (target_page == 5) { 
                   id(trmnl_display).show_page(id(ap_page)); 
                   ESP_LOGD("display", "Обновление экрана: ap_page");
+                } else if (target_page == 6) { 
+                  id(trmnl_display).show_page(id(battery_low_page)); 
+                  ESP_LOGD("display", "Обновление экрана: battery_low_page");
                 }
             - delay: 16ms
             - component.update: trmnl_display
@@ -598,22 +615,56 @@ display:
           it.printf(center_x, center_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "РЕЖИМ НАСТРОЙКИ");
           it.printf(center_x, text_20_y, id(pixel_font_20), COLOR_ON, TextAlign::CENTER, "Отсканируйте QR код и подключите к своей wifi сети");
         }
+    - id: battery_low_page
+      lambda: |-
+        int center_x = it.get_width() / 2; // Центр по X
+        int center_y = it.get_height() / 2; // Середина по Y
 
+        // Получаем реальную ширину и высоту картинки
+        int img_w = id(battery_low_image).get_width();
+        int img_h = id(battery_low_image).get_height();
+
+        // 1. Главный текст (чуть выше центра)
+        int text_main_y = center_y; 
+        
+        // 2. Картинка 
+        int img_x = center_x - (img_w / 2);
+        int img_y = center_y - (img_h / 2) + 120; // Небольшое смещение под текст
+
+        // 3. Напряжение 
+        int text_20_y = img_y + (img_h / 2); 
+
+        // Вывод главного текста 
+        if (id(sys_language).state == "EN") {
+          it.printf(center_x, text_main_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "LOW BATTERY");
+        } else {
+          it.printf(center_x, text_main_y, id(pixel_font), COLOR_ON, TextAlign::CENTER, "БАТАРЕЯ РАЗРЯЖЕНА");
+        }
+
+        // Отрисовка иконки
+        it.image(img_x, img_y, id(battery_low_image), COLOR_ON, COLOR_OFF);
+
+        // Вывод напряжения
+        it.printf(center_x, text_20_y, id(pixel_font_20), COLOR_ON, TextAlign::CENTER, "%.2fV", id(battery_voltage).state);
+        
 font:
   - file: "https://github.com/IdreesInc/Monocraft/releases/download/v3.0/Monocraft.ttf"
     id: pixel_font
     size: 64 
-    glyphs: "EROОШИБКАTUP MDРЕЖМНСТЙS"
+    glyphs: "БАТРЕЯ ЗЖНLOWBATERYОШИКUPMDМСЙS"
 
   - file: "https://github.com/IdreesInc/Monocraft/releases/download/v3.0/Monocraft.ttf"
     id: pixel_font_20
     size: 20 
-    glyphs: "Web srvсервScanQRodti-FОтканиуйодплючwf"
+    glyphs: "Web srvсервScanQRodti-FОтканиуйодплючwf1234567890V."
 
-# image:
+image:
 #   - file: "https://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/smail-dithered.png"
 #     id: pause_image
 #     type: BINARY
+  - file: "https://raw.githubusercontent.com/kfattum/esphome-trmnl/refs/heads/main/img/battery-dithered.png"
+    id: battery_low_image
+    type: BINARY
 
 button:
   - platform: factory_reset
@@ -678,10 +729,10 @@ sensor:
     filters:
       - multiply: 2
       - round: 2
-      - calibrate_linear:
-           - 3.22 -> 3.75
-           - 3.64 -> 4.19
-           - 3.89 -> 4.20
+      # - calibrate_linear:
+      #      - 3.22 -> 3.75
+      #      - 3.64 -> 4.19
+      #      - 3.89 -> 4.20
     on_value:
       - text_sensor.template.publish:
           id: battery_voltage_text
@@ -789,7 +840,7 @@ text:
                 id(ha_url_dynamic) = x;
                 global_preferences->sync(); // Сохраняем во flash-память ESP32
             - logger.log:
-                format: "URL сервера Inker принудительно изменен на: %s"
+                format: "URL сервера Home Assistant принудительно изменен на: %s"
                 args: [ 'id(ha_url_dynamic).c_str()' ]
 
 select:
@@ -803,3 +854,17 @@ select:
       - "EN"
     initial_option: "EN"
     restore_value: true
+
+number:
+  - platform: template
+    name: "Low Battery Threshold"
+    id: low_battery_threshold
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: "$low_battery_threshold" # 0.0 = проверка отключена
+    min_value: 0.0
+    max_value: 4.2
+    step: 0.05
+    unit_of_measurement: "V"
+    mode: box
