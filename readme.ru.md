@@ -1,6 +1,6 @@
 [English](readme.md) | **Русский**
 
-<img width="480" height="360" alt="esphome-trmnl-logo" src="https://github.com/kfattum/esphome-trmnl/blob/1c345e635d8e8d937e3d12bf44bb193d6266a37a/img/logo2x.png" />
+<img width="480" height="121.42" alt="esphome-trmnl-logo" src="https://github.com/kfattum/esphome-trmnl/blob/1c345e635d8e8d937e3d12bf44bb193d6266a37a/img/logo2x.png" />
 
 Репозиторий проекта E-ink дисплея на ESPHome, предназначенного для отображения данных с вашего сервера [inker](https://github.com/usetrmnl/inker) ~~TRMNL BYOD~~ и управляемый Home Assistant. Проект не создан командой ESPHome или ТRMNL и не аффилирован с ними.
 
