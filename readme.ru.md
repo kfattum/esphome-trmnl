@@ -1,22 +1,11 @@
 [English](readme.md) | **Русский**
-<table>
-    <tr>
-        <td><img width="480" height="360" alt="DSC00163" src="https://github.com/user-attachments/assets/c8ebdde8-9719-4faf-894d-5d4061a223ab" /></td>
-        <td><img width="480" height="360" alt="Gemini_2" src="https://github.com/user-attachments/assets/e96f1e79-bff0-4bd4-8e9c-7d5a7576f1c1" /></td>
-    </tr>
-</table>
+
+<img width="480" height="360" alt="DSC00163" src="/img/logo2x.png" />
 
 Репозиторий проекта E-ink дисплея на ESPHome, предназначенного для отображения данных с вашего сервера [inker](https://github.com/usetrmnl/inker) ~~TRMNL BYOD~~ и управляемый Home Assistant. Проект не создан командой ESPHome или ТRMNL и не аффилирован с ними.
 
-**Документация:** [EN](https://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/) | [RU](https://kfattum.github.io/open_projects/ESPHome-TRMNL_7+5/)
+**Документация:** 
 
-``` mermaid
-flowchart LR
-    HA["Home <br> Assistant"] -- JSON API --> Inker["Inker"]
-    Inker <-- HTTP-запросы --> ESPH["ESPHome <br> E-Ink дисплей"]
-    Inker -- PNG --> ESPH["ESPHome <br> E-Ink дисплей"]
-    HA <--> Int["Кастомная интеграция"]
-    HA --> BP["blueprint"]
-    BP --> Int
-    Int <-- HTTP-запросы --> ESPH
-```
+- [Общая информация](https://kfattum.github.io/open_projects/ESPHome-TRMNL_7+5/)
+- [Интеграция с Home Assistant](https://kfattum.github.io/en/open_projects/ESPHome-TRMNL_7+5/readme_custom_components_esphome-trmnl/)
+
