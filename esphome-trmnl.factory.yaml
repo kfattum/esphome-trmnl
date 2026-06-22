@@ -563,11 +563,13 @@ spi:
 display:
   platform: waveshare_epaper
   id: trmnl_display
-  cs_pin: $cs_pin
+  cs_pin: 
+      number: $cs_pin
+      ignore_strapping_warning: True
   dc_pin: $dc_pin
   busy_pin: 
     number: $busy_pin
-    inverted: true # Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях). Установите для контакта busy значение inverted: true в настройках
+    inverted: true # Для предотвращения необратимого повреждения дисплея необходимо инвертировать контакт BUSY на моделях gdew0154m09, Waveshare 7.30in-f и Waveshare 7.50in V2 (и наверно на V3 и других новых моделях).
   reset_pin: $reset_pin
   reset_duration: $reset_duration
   model: $model
