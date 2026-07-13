@@ -3,7 +3,7 @@
 # 3. Длинное нажатие (более 5 секунд) в активном режиме включает режим настройки в котором если плата подключена к wifi то отобразится qr-код со ссылкой на web-интерфейс, а если не подключена то qr-код со ссылкой на captive portal. В этом режиме устройство не засыпает 30 минут, а затем переходит в глубокий сон. 
 
 substitutions:
-  fw_version: "2.1.0 esphome-trmnl"
+  fw_version: "2.2.0 esphome-trmnl"
   HA_url: "http://homeassistant.local:8123" # URL сервера Home Assistant
   Inker_url: "http://homeassistant.local:8124" # URL сервера Inker
 
@@ -177,11 +177,20 @@ ota:
 
 web_server:
   port: 80
-  version: 2 
+  version: "3"
   auth:
     username: $web_username 
     password: $web_password 
     
+  local: true
+  sorting_groups:
+    - id: sensors
+      name: Sensors
+      sorting_weight: "2"
+    - name: Settings
+      id: control
+      sorting_weight: "1"
+      
 captive_portal:
   
 improv_serial:
@@ -433,7 +442,12 @@ script:
                                   id(trmnl_image).set_url(override_str);
                                   ESP_LOGD("update", "Используется прямая ссылка на изображение (Override)");
                                 } else {
-                                  id(trmnl_image).set_url(root["image_url"].as<std::string>());
+                                  // Модификация ссылки для Inker Dithering
+                                  std::string img_url = root["image_url"].as<std::string>();
+                                  if (!id(enable_dithering).state) {
+                                    img_url += "&mode=preview"; // дизеринг выключен
+                                  }
+                                  id(trmnl_image).set_url(img_url);
                                 }
                                 
                                 // Логика определения sleep_time
@@ -698,11 +712,15 @@ button:
   - platform: factory_reset
     name: "Factory Reset"
     id: factory_reset_button
-
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 5
   - platform: restart
     name: "Restart"
     id: restart_button
-
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 4
 binary_sensor:
   - platform: gpio
     name: Button
@@ -765,7 +783,9 @@ sensor:
       - text_sensor.template.publish:
           id: battery_voltage_text
           state: !lambda 'return str_sprintf("%.2f", x).c_str();'
-
+    web_server:
+      sorting_group_id: sensors
+      
   - platform: copy
     id: battery_voltage_prc
     name: "Battery Level"
@@ -789,7 +809,9 @@ sensor:
       - text_sensor.template.publish:
           id: battery_voltage_prc_text
           state: !lambda 'return str_sprintf("%.2f", x).c_str();'
-
+    web_server:
+      sorting_group_id: sensors
+      
   - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
     name: "Wi-Fi Signal, dB"
     id: wifi_signal_db
@@ -800,7 +822,9 @@ sensor:
       - text_sensor.template.publish:
           id: rssi_text
           state: !lambda 'return str_sprintf("%.0f", x).c_str();'
-
+    web_server:
+      sorting_group_id: sensors
+      
   - platform: copy # Reports the WiFi signal strength in %
     id: wifi_signal_db_prc
     source_id: wifi_signal_db
@@ -814,7 +838,9 @@ sensor:
       - text_sensor.template.publish:
           id: wifi_signal_db_prc_text
           state: !lambda 'return str_sprintf("%.2f", x).c_str();'
-
+    web_server:
+      sorting_group_id: sensors
+      
 text_sensor:
   - platform: wifi_info
     mac_address:
@@ -839,38 +865,48 @@ text_sensor:
 text:
   - platform: template
     name: "Inker Server URL"
+    id: inker_url_text
     mode: text
-    optimistic: true
-    on_value:
-      - if:
-          condition:
-            lambda: 'return x != "" && x != id(inker_url_dynamic);'
-          then:
-            - delay: 16ms
-            - lambda: |-
-                id(inker_url_dynamic) = x;
-                global_preferences->sync(); // Сохраняем во flash-память ESP32
-            - logger.log:
-                format: "URL сервера Inker принудительно изменен на: %s"
-                args: [ 'id(inker_url_dynamic).c_str()' ]
+    lambda: |-
+      return id(inker_url_dynamic);
+    set_action:
+      then:
+        - if:
+            condition:
+              lambda: return x != "" && x != id(inker_url_dynamic);
+            then:
+              - lambda: |
+                  id(inker_url_dynamic) = x;
+                  global_preferences->sync(); // Сохраняем во flash-память ESP32
+              - logger.log:
+                  format: 'URL сервера Inker изменен на: %s'
+                  args:
+                    - id(inker_url_dynamic).c_str()
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 1
 
   - platform: template
     name: "Home Assistant Server URL"
+    id: ha_url_text
     mode: text
-    optimistic: true
-    on_value:
-      - if:
-          condition:
-            lambda: 'return x != "" && x != id(ha_url_dynamic);'
-          then:
-            - delay: 16ms
-            - lambda: |-
-                id(ha_url_dynamic) = x;
-                global_preferences->sync(); // Сохраняем во flash-память ESP32
-            - logger.log:
-                format: "URL сервера Home Assistant принудительно изменен на: %s"
-                args: [ 'id(ha_url_dynamic).c_str()' ]
-
+    lambda: |-
+      return id(ha_url_dynamic);
+    set_action:
+      then:
+        - if:
+            condition:
+              lambda: 'return x != "" && x != id(ha_url_dynamic);'
+            then:
+              - lambda: |-
+                  id(ha_url_dynamic) = x;
+                  global_preferences->sync(); // Сохраняем во flash-память ESP32
+              - logger.log:
+                  format: "URL сервера Home Assistant изменен на: %s"
+                  args: [ 'id(ha_url_dynamic).c_str()' ]
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 2
 select:
   - platform: template
     name: "Language"
@@ -882,7 +918,10 @@ select:
       - "EN"
     initial_option: "EN"
     restore_value: true
-
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 0
+      
 number:
   - platform: template
     name: "Low Battery Threshold"
@@ -895,4 +934,19 @@ number:
     max_value: 4.2
     step: 0.05
     unit_of_measurement: "V"
-    mode: box
+    mode: SLIDER
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 3
+    icon: "mdi:battery20"
+
+switch:
+  - platform: template
+    name: "Dithering (inker)"
+    id: enable_dithering
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    web_server:
+      sorting_group_id: control
+      sorting_weight: 6
